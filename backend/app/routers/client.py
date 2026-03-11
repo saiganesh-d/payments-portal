@@ -126,8 +126,7 @@ async def upload_qr(file: UploadFile = File(...), current_user: User = Depends(r
     filepath = os.path.join("uploads", filename)
     with open(filepath, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    # Assume server runs on localhost:8000 for simplicity, or relative path
-    return {"url": f"http://localhost:8000/uploads/{filename}"}
+    return {"url": f"/uploads/{filename}"}
 
 # --- PAYMENT MANAGEMENT & STATEMENTS ---
 @router.post("/payments", response_model=PaymentResponse)

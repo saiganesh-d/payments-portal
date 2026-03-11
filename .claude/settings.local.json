@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npx tsc:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(ls /c/Users/saiga/Desktop/testture/backend/*.txt /c/Users/saiga/Desktop/testture/backend/*.toml 2>/dev/null; ls /c/Users/saiga/Desktop/testture/Dockerfile 2>/dev/null)",
+      "Bash(ls /c/Users/saiga/Desktop/testture/backend/venv/lib/python*/site-packages 2>/dev/null | head -5; pip freeze 2>/dev/null | head -5)"
     ]
   }
 }
