@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: payment-portal
+    env: docker
+    region: singapore
+    plan: starter
+    # Render will automatically use the Dockerfile in the root of the repository
+    dockerCommand: ./start.sh
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Requires manual setup in the Render Dashboard
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PORT
+        value: 10000
