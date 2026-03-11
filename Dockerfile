@@ -1,6 +1,6 @@
 # Stage 1: Build the React Frontend
 FROM node:20-alpine AS frontend-builder
-WORKDIR /app/frontend
+WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci
@@ -16,14 +16,14 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y gcc libpq-dev && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements and install them
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/requirements.txt ./backend/
+RUN pip install --no-cache-dir -r backend/requirements.txt
 
 # Copy the entire backend directory
 COPY backend ./backend
 
 # Copy the built React app from the frontend-builder stage into a "dist" folder at the root
-COPY --from=frontend-builder /app/frontend/dist /app/dist
+COPY --from=frontend-builder /app/dist /app/dist
 
 # Set up environment variables
 ENV PYTHONPATH=/app/backend
