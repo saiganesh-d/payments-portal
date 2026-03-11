@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { LockKey, CurrencyInr, CheckCircle, Clock, XCircle, ArrowLeft } from '@phosphor-icons/react';
+import { LockKey, CheckCircle, Clock, XCircle, ArrowLeft } from '@phosphor-icons/react';
 import api from './api';
 
 function TableSkeleton({ columns, rows = 5 }: { columns: number; rows?: number }) {
