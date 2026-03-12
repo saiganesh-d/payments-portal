@@ -3,7 +3,7 @@ import {
   Plus, CurrencyInr, User as UserIcon, Trash,
   Files, Clock, ChartBar, Key, MagnifyingGlass, ArrowCounterClockwise,
   Bank, QrCode, Eye, WarningCircle, Users, TrendUp, Hourglass, XCircle as XCircleIcon,
-  PencilSimple, FloppyDisk, Wallet, CaretDown, CaretUp
+  PencilSimple, FloppyDisk, Wallet, CaretDown, CaretUp, UserPlus
 } from '@phosphor-icons/react';
 import api from './api';
 
@@ -117,6 +117,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
   const [editAccNum, setEditAccNum] = useState('');
   const [editIfsc, setEditIfsc] = useState('');
   const [editAccName, setEditAccName] = useState('');
+  const [editBankName, setEditBankName] = useState('');
   const [editSaving, setEditSaving] = useState(false);
 
   // Create form
@@ -126,6 +127,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
   const [accNum, setAccNum] = useState('');
   const [ifsc, setIfsc] = useState('');
   const [accName, setAccName] = useState('');
+  const [bankName, setBankName] = useState('');
 
   const fetchWorkers = useCallback(async () => {
     setDataLoading(true);
@@ -146,6 +148,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
     setEditAccNum(w.bank_account_number || '');
     setEditIfsc(w.bank_ifsc || '');
     setEditAccName(w.bank_account_name || '');
+    setEditBankName(w.bank_name || '');
   };
 
   const handleSaveEdit = async () => {
@@ -166,6 +169,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
         bank_account_number: editAccNum || null,
         bank_ifsc: editIfsc || null,
         bank_account_name: editAccName || null,
+        bank_name: editBankName || null,
       };
       if (qrUrl !== undefined) {
         payload.qr_code_url = qrUrl;
@@ -204,11 +208,12 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
         qr_code_url: qrUrl,
         bank_account_number: accNum || null,
         bank_ifsc: ifsc || null,
-        bank_account_name: accName || null
+        bank_account_name: accName || null,
+        bank_name: bankName || null
       });
 
       setShowAdd(false);
-      setName(''); setUserIdCode(''); setQrFile(null); setAccNum(''); setIfsc(''); setAccName('');
+      setName(''); setUserIdCode(''); setQrFile(null); setAccNum(''); setIfsc(''); setAccName(''); setBankName('');
       fetchWorkers();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Error adding user');
@@ -402,6 +407,12 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
                 {!editMode ? (
                   viewWorker.bank_account_number ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {viewWorker.bank_name && (
+                        <div className="bank-detail-item">
+                          <span className="bank-detail-label">Bank Name</span>
+                          <span className="bank-detail-value">{viewWorker.bank_name}</span>
+                        </div>
+                      )}
                       <div className="bank-detail-item">
                         <span className="bank-detail-label">Account Number</span>
                         <span className="bank-detail-value" style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>{viewWorker.bank_account_number}</span>
@@ -422,6 +433,10 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
                   )
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label>Bank Name</label>
+                      <input placeholder="e.g., State Bank of India" value={editBankName} onChange={e => setEditBankName(e.target.value)} />
+                    </div>
                     <div className="form-group" style={{ marginBottom: 0 }}>
                       <label>Account Holder Name</label>
                       <input placeholder="Name as per bank records" value={editAccName} onChange={e => setEditAccName(e.target.value)} />
@@ -530,6 +545,10 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
                   <Bank size={14} /> Bank Details (Optional)
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Bank Name</label>
+                    <input placeholder="e.g., State Bank of India" value={bankName} onChange={e => setBankName(e.target.value)} />
+                  </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Account Holder Name</label>
                     <input placeholder="Name as per bank records" value={accName} onChange={e => setAccName(e.target.value)} />
@@ -1038,7 +1057,7 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
       ) : (
         <div className="table-container">
           <table className="table">
-            <thead><tr><th>Date</th><th>User</th><th>Amount</th><th>Status</th><th>Payment Info</th><th>UTR / Comment</th></tr></thead>
+            <thead><tr><th>Date</th><th>User</th><th>Amount</th><th>Status</th><th>Processed By</th><th>UTR / Comment</th></tr></thead>
             <tbody>
               {statements.map(tx => (
                 <tr key={tx.id}>
@@ -1060,16 +1079,19 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
                       {tx.status}
                     </span>
                   </td>
-                  <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    {tx.worker?.bank_account_number ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <Bank size={14} /> ***{tx.worker.bank_account_number.slice(-4)}
-                      </span>
-                    ) : tx.worker?.qr_code_url ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <QrCode size={14} /> QR Scan
-                      </span>
-                    ) : 'N/A'}
+                  <td style={{ fontSize: '0.85rem' }}>
+                    {tx.locked_by_staff ? (
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{tx.locked_by_staff.username}</div>
+                        {tx.completed_at && (
+                          <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                            {new Date(tx.completed_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                    )}
                   </td>
                   <td>
                     {tx.transaction_ref_no && <div style={{ fontSize: '0.85rem' }}><strong>UTR:</strong> <span style={{ fontFamily: 'monospace' }}>{tx.transaction_ref_no}</span></div>}
@@ -1104,8 +1126,9 @@ function AdminPanelBlock() {
   const [balanceAmounts, setBalanceAmounts] = useState<Record<string, string>>({});
   const [balanceNotes, setBalanceNotes] = useState<Record<string, string>>({});
   const [addingBalance, setAddingBalance] = useState<string | null>(null);
-  const [balanceLogs, setBalanceLogs] = useState<Record<string, any[]>>({});
-  const [showLogs, setShowLogs] = useState<string | null>(null);
+  const [staffHistory, setStaffHistory] = useState<Record<string, any[]>>({});
+  const [showHistory, setShowHistory] = useState<string | null>(null);
+  const [showAddStaffForm, setShowAddStaffForm] = useState(false);
 
   const fetchStaff = useCallback(async () => {
     setDataLoading(true);
@@ -1171,44 +1194,46 @@ function AdminPanelBlock() {
     }
   };
 
-  const handleViewBalanceLogs = async (staffId: string) => {
-    if (showLogs === staffId) {
-      setShowLogs(null);
+  const handleViewHistory = async (staffId: string) => {
+    if (showHistory === staffId) {
+      setShowHistory(null);
       return;
     }
     try {
-      const res = await api.get(`/client/staff/${staffId}/balance-logs`);
-      setBalanceLogs(prev => ({ ...prev, [staffId]: res.data }));
-      setShowLogs(staffId);
-    } catch { alert('Error fetching balance logs'); }
+      const res = await api.get(`/client/staff/${staffId}/full-history`);
+      setStaffHistory(prev => ({ ...prev, [staffId]: res.data }));
+      setShowHistory(staffId);
+    } catch { alert('Error fetching staff history'); }
   };
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 400px) 1fr', gap: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h3>Manage Staff</h3>
+        <button className="btn-primary" onClick={() => setShowAddStaffForm(!showAddStaffForm)}>
+          <UserPlus size={16} /> {showAddStaffForm ? 'Hide Form' : 'Add Staff'}
+        </button>
+      </div>
 
-        <div style={{ background: 'var(--bg-secondary)', padding: '2rem', borderRadius: 'var(--radius-lg)' }}>
-          <h3 style={{ marginBottom: '0.75rem' }}>Onboard Staff Member</h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
-            Create login credentials for your team so they can process payments.
-          </p>
-          <form onSubmit={handleCreateStaff} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
+      {showAddStaffForm && (
+        <div style={{ background: 'var(--bg-secondary)', padding: '1.5rem', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem' }}>
+          <form onSubmit={handleCreateStaff} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '180px' }}>
               <label>Staff Login Username</label>
               <input required type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g., staff_john" />
             </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
+            <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '180px' }}>
               <label>Password</label>
               <input required type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Choose a strong password" />
             </div>
-            <button type="submit" className="btn-primary" disabled={loading} style={{ marginTop: '0.5rem' }}>
+            <button type="submit" className="btn-primary" disabled={loading} style={{ height: '42px' }}>
               {loading ? 'Creating...' : 'Create Staff Account'}
             </button>
           </form>
         </div>
+      )}
 
-        <div>
-          <h3 style={{ marginBottom: '1rem' }}>Manage Staff</h3>
+      <div>
           {dataLoading ? (
             <TableSkeleton columns={5} rows={3} />
           ) : (
@@ -1245,8 +1270,8 @@ function AdminPanelBlock() {
                                <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem', color: 'var(--accent-color)' }} onClick={() => handleResetPassword(staff.id)}>
                                    Reset Password
                                </button>
-                               <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }} onClick={() => handleViewBalanceLogs(staff.id)}>
-                                   {showLogs === staff.id ? <CaretUp size={14} /> : <CaretDown size={14} />} History
+                               <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }} onClick={() => handleViewHistory(staff.id)}>
+                                   {showHistory === staff.id ? <CaretUp size={14} /> : <CaretDown size={14} />} History
                                </button>
                            </div>
                         </td>
@@ -1278,23 +1303,48 @@ function AdminPanelBlock() {
                           </div>
                         </td>
                       </tr>
-                      {/* Balance logs */}
-                      {showLogs === staff.id && balanceLogs[staff.id] && (
-                        <tr key={`${staff.id}-logs`}>
-                          <td colSpan={5} style={{ padding: '0.5rem 1rem', background: 'var(--bg-tertiary)' }}>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Balance History</div>
-                            {balanceLogs[staff.id].length === 0 ? (
-                              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '0.5rem 0' }}>No balance additions yet.</div>
+                      {/* Full history (deposits + payments) */}
+                      {showHistory === staff.id && staffHistory[staff.id] && (
+                        <tr key={`${staff.id}-history`}>
+                          <td colSpan={5} style={{ padding: '0.75rem 1rem', background: 'var(--bg-tertiary)' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>Transaction History (Bank Statement)</div>
+                            {staffHistory[staff.id].length === 0 ? (
+                              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '0.5rem 0' }}>No history yet.</div>
                             ) : (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                {balanceLogs[staff.id].map((log: any) => (
-                                  <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.35rem 0', borderBottom: '1px solid var(--border-color)' }}>
-                                    <span style={{ color: '#16a34a', fontWeight: 600 }}>+₹{log.amount.toLocaleString()}</span>
-                                    <span style={{ color: 'var(--text-secondary)' }}>Balance: ₹{log.balance_after.toLocaleString()}</span>
-                                    {log.note && <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>{log.note}</span>}
-                                    <span style={{ color: 'var(--text-secondary)' }}>{timeAgo(log.created_at)}</span>
-                                  </div>
-                                ))}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                {staffHistory[staff.id].map((entry: any, idx: number) => {
+                                  const isDeposit = entry.type === 'deposit';
+                                  const entryTime = entry.completed_at || entry.created_at;
+                                  return (
+                                    <div key={idx} style={{
+                                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                      fontSize: '0.8rem', padding: '0.5rem 0.25rem', borderBottom: '1px solid var(--border-color)',
+                                      gap: '0.5rem', flexWrap: 'wrap'
+                                    }}>
+                                      <span style={{
+                                        color: isDeposit ? '#16a34a' : '#dc2626',
+                                        fontWeight: 700, minWidth: '100px'
+                                      }}>
+                                        {isDeposit ? '+' : '-'}₹{entry.amount.toLocaleString()}
+                                      </span>
+                                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', minWidth: '80px' }}>
+                                        {isDeposit ? 'Deposit' : `Payment${entry.status === 'FAILED' ? ' (Failed)' : ''}`}
+                                      </span>
+                                      {entry.worker_id_code && (
+                                        <span className="user-id-highlight" style={{ fontSize: '0.75rem' }}>{entry.worker_id_code}</span>
+                                      )}
+                                      {entry.balance_after !== null && (
+                                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                                          Bal: ₹{entry.balance_after.toLocaleString()}
+                                        </span>
+                                      )}
+                                      {entry.note && <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic', fontSize: '0.75rem' }}>{entry.note}</span>}
+                                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginLeft: 'auto' }}>
+                                        {new Date(entryTime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                           </td>
@@ -1308,7 +1358,6 @@ function AdminPanelBlock() {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }

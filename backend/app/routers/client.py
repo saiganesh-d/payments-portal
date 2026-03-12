@@ -90,6 +90,53 @@ def get_balance_logs(staff_id: str, db: Session = Depends(get_db), current_user:
     logs = db.query(BalanceLog).filter(BalanceLog.staff_id == staff_id).order_by(BalanceLog.created_at.desc()).all()
     return logs
 
+@router.get("/staff/{staff_id}/full-history")
+def get_staff_full_history(staff_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
+    """Returns combined deposit and payment history for a staff member, sorted by time descending."""
+    staff = db.query(User).filter(User.id == staff_id, User.client_id == current_user.id, User.role == UserRole.STAFF).first()
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    # Get balance deposits
+    logs = db.query(BalanceLog).filter(BalanceLog.staff_id == staff_id).all()
+    entries = []
+    for log in logs:
+        entries.append({
+            "type": "deposit",
+            "amount": log.amount,
+            "balance_after": log.balance_after,
+            "created_at": log.created_at,
+            "completed_at": None,
+            "note": log.note,
+            "worker_id_code": None,
+            "status": None,
+        })
+
+    # Get completed/failed payments processed by this staff
+    payments = db.query(PaymentRequest).options(
+        joinedload(PaymentRequest.worker)
+    ).filter(
+        PaymentRequest.locked_by_staff_id == staff_id,
+        PaymentRequest.client_id == current_user.id,
+        PaymentRequest.status.in_([PaymentStatus.COMPLETED, PaymentStatus.FAILED])
+    ).all()
+    for p in payments:
+        entries.append({
+            "type": "payment",
+            "amount": p.amount,
+            "balance_after": None,
+            "created_at": p.created_at,
+            "completed_at": p.completed_at,
+            "note": None,
+            "worker_id_code": p.worker.worker_id_code if p.worker else None,
+            "status": p.status.value if p.status else None,
+        })
+
+    # Sort by time descending (use completed_at for payments if available, else created_at)
+    entries.sort(key=lambda e: e["completed_at"] or e["created_at"] or datetime.min, reverse=True)
+
+    return entries
+
 # --- WORKER MANAGEMENT ---
 @router.post("/workers", response_model=WorkerResponse)
 def create_worker(worker_data: WorkerCreate, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
@@ -101,6 +148,7 @@ def create_worker(worker_data: WorkerCreate, db: Session = Depends(get_db), curr
         bank_account_number=worker_data.bank_account_number,
         bank_ifsc=worker_data.bank_ifsc,
         bank_account_name=worker_data.bank_account_name,
+        bank_name=worker_data.bank_name,
         is_active=True
     )
     db.add(new_worker)
@@ -118,6 +166,7 @@ class WorkerUpdate(BaseModel):
     bank_account_number: Optional[str] = None
     bank_ifsc: Optional[str] = None
     bank_account_name: Optional[str] = None
+    bank_name: Optional[str] = None
 
 @router.put("/workers/{worker_id}", response_model=WorkerResponse)
 def update_worker(worker_id: str, data: WorkerUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
@@ -132,6 +181,8 @@ def update_worker(worker_id: str, data: WorkerUpdate, db: Session = Depends(get_
         worker.bank_ifsc = data.bank_ifsc
     if data.bank_account_name is not None:
         worker.bank_account_name = data.bank_account_name
+    if data.bank_name is not None:
+        worker.bank_name = data.bank_name
     db.commit()
     db.refresh(worker)
     return worker

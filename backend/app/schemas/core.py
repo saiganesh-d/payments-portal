@@ -40,6 +40,7 @@ class WorkerCreate(BaseModel):
     bank_account_number: Optional[str] = None
     bank_ifsc: Optional[str] = None
     bank_account_name: Optional[str] = None
+    bank_name: Optional[str] = None
 
 class WorkerResponse(BaseModel):
     id: str
@@ -50,6 +51,7 @@ class WorkerResponse(BaseModel):
     bank_account_number: Optional[str] = None
     bank_ifsc: Optional[str] = None
     bank_account_name: Optional[str] = None
+    bank_name: Optional[str] = None
     is_active: bool
     created_at: datetime
 
@@ -75,6 +77,7 @@ class PaymentResponse(BaseModel):
     created_at: datetime
 
     worker: Optional[WorkerResponse] = None
+    locked_by_staff: Optional[UserResponse] = None
 
     class Config:
         from_attributes = True

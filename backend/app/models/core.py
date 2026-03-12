@@ -61,7 +61,8 @@ class Worker(Base):
     bank_account_number = Column(String, nullable=True)
     bank_ifsc = Column(String, nullable=True)
     bank_account_name = Column(String, nullable=True)
-    
+    bank_name = Column(String, nullable=True)
+
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
