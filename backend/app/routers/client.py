@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, case, desc
 from typing import List, Optional
 from datetime import datetime
 
 from app.database import get_db
-from app.models.core import User, Worker, PaymentRequest, PaymentStatus, UserRole
-from app.schemas.core import WorkerCreate, WorkerResponse, PaymentCreate, PaymentResponse, StaffCreate, UserResponse
+from app.models.core import User, Worker, PaymentRequest, PaymentStatus, UserRole, BalanceLog
+from app.schemas.core import (
+    WorkerCreate, WorkerResponse, PaymentCreate, PaymentResponse,
+    StaffCreate, UserResponse, BalanceAdd, BalanceLogResponse
+)
 from app.core.deps import require_client
 from app.core.security import get_password_hash
 from pydantic import BaseModel
@@ -16,10 +19,9 @@ router = APIRouter(prefix="/client", tags=["client"])
 # --- STAFF MANAGEMENT (ADMIN PANEL) ---
 @router.post("/staff", response_model=UserResponse)
 def create_staff(staff_data: StaffCreate, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
-    # Check if username exists
     if db.query(User).filter(User.username == staff_data.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
-        
+
     new_staff = User(
         username=staff_data.username,
         hashed_password=get_password_hash(staff_data.password),
@@ -56,6 +58,37 @@ def reset_staff_password(staff_id: str, data: PasswordResetSchema, db: Session =
     staff.hashed_password = get_password_hash(data.new_password)
     db.commit()
     return {"message": "Password reset successfully"}
+
+# --- BALANCE MANAGEMENT ---
+@router.post("/staff/{staff_id}/add-balance", response_model=UserResponse)
+def add_staff_balance(staff_id: str, data: BalanceAdd, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
+    staff = db.query(User).filter(User.id == staff_id, User.client_id == current_user.id, User.role == UserRole.STAFF).first()
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    staff.available_balance += data.amount
+    new_balance = staff.available_balance
+
+    # Create balance log
+    log = BalanceLog(
+        staff_id=staff.id,
+        added_by_client_id=current_user.id,
+        amount=data.amount,
+        balance_after=new_balance,
+        note=data.note
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(staff)
+    return staff
+
+@router.get("/staff/{staff_id}/balance-logs", response_model=List[BalanceLogResponse])
+def get_balance_logs(staff_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
+    staff = db.query(User).filter(User.id == staff_id, User.client_id == current_user.id, User.role == UserRole.STAFF).first()
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    logs = db.query(BalanceLog).filter(BalanceLog.staff_id == staff_id).order_by(BalanceLog.created_at.desc()).all()
+    return logs
 
 # --- WORKER MANAGEMENT ---
 @router.post("/workers", response_model=WorkerResponse)
@@ -108,7 +141,7 @@ def delete_worker(worker_id: str, db: Session = Depends(get_db), current_user: U
     worker = db.query(Worker).filter(Worker.id == worker_id, Worker.client_id == current_user.id).first()
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
-    
+
     # Soft delete
     worker.is_active = False
     db.commit()
@@ -134,18 +167,46 @@ def create_payment(payment_data: PaymentCreate, db: Session = Depends(get_db), c
     worker = db.query(Worker).filter(Worker.id == payment_data.worker_id, Worker.client_id == current_user.id).first()
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
-        
+
+    # Prevent duplicate: check if worker already has PENDING or PROCESSING payment
+    existing = db.query(PaymentRequest).filter(
+        PaymentRequest.worker_id == worker.id,
+        PaymentRequest.client_id == current_user.id,
+        PaymentRequest.status.in_([PaymentStatus.PENDING, PaymentStatus.PROCESSING])
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="This user already has a pending or processing payment. Wait until it's completed before adding another."
+        )
+
     payment = PaymentRequest(
         worker_id=worker.id,
         client_id=current_user.id,
         amount=payment_data.amount,
         status=PaymentStatus.PENDING
     )
-    
+
     db.add(payment)
     db.commit()
     db.refresh(payment)
     return payment
+
+@router.delete("/payments/{payment_id}")
+def delete_payment(payment_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
+    """Delete a PENDING payment (client added by mistake or wrong amount)."""
+    payment = db.query(PaymentRequest).filter(
+        PaymentRequest.id == payment_id,
+        PaymentRequest.client_id == current_user.id
+    ).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if payment.status != PaymentStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Only PENDING payments can be deleted")
+
+    db.delete(payment)
+    db.commit()
+    return {"message": "Payment deleted successfully"}
 
 @router.put("/payments/{payment_id}", response_model=PaymentResponse)
 def update_payment(payment_id: str, amount: float, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
@@ -154,7 +215,7 @@ def update_payment(payment_id: str, amount: float, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Payment not found")
     if payment.status != PaymentStatus.PENDING:
         raise HTTPException(status_code=400, detail="Can only modify PENDING payments")
-        
+
     payment.amount = amount
     db.commit()
     db.refresh(payment)
@@ -167,7 +228,7 @@ def retry_payment(payment_id: str, db: Session = Depends(get_db), current_user: 
         raise HTTPException(status_code=404, detail="Payment not found")
     if payment.status != PaymentStatus.FAILED:
         raise HTTPException(status_code=400, detail="Only failed payments can be retried.")
-        
+
     payment.status = PaymentStatus.PENDING
     payment.locked_by_staff_id = None
     payment.locked_at = None
@@ -184,14 +245,15 @@ def get_statements(
     status: Optional[PaymentStatus] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    db: Session = Depends(get_db), 
+    staff_id: Optional[str] = None,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_client)
 ):
-    """
-    Get paginated/filtered statements. Supports date ranges, specific workers, and specific statuses.
-    """
-    query = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(PaymentRequest.client_id == current_user.id)
-    
+    query = db.query(PaymentRequest).options(
+        joinedload(PaymentRequest.worker),
+        joinedload(PaymentRequest.locked_by_staff)
+    ).filter(PaymentRequest.client_id == current_user.id)
+
     if worker_id:
         query = query.filter(PaymentRequest.worker_id == worker_id)
     if status:
@@ -200,24 +262,37 @@ def get_statements(
         query = query.filter(PaymentRequest.created_at >= start_date)
     if end_date:
         query = query.filter(PaymentRequest.created_at <= end_date)
-        
+    if staff_id:
+        query = query.filter(PaymentRequest.locked_by_staff_id == staff_id)
+
     return query.order_by(PaymentRequest.created_at.desc()).all()
 
 @router.get("/statistics")
-def get_statistics(db: Session = Depends(get_db), current_user: User = Depends(require_client)):
-    """
-    Returns comprehensive statistics using minimal queries.
-    """
-    from sqlalchemy import case, desc
+def get_statistics(
+    staff_id: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_client)
+):
+    """Returns comprehensive statistics with optional staff and date range filters."""
 
-    # Single query for all payment stats grouped by status
-    payment_stats = db.query(
+    query = db.query(
         PaymentRequest.status,
         func.count(PaymentRequest.id).label('cnt'),
         func.coalesce(func.sum(PaymentRequest.amount), 0).label('total')
     ).filter(
         PaymentRequest.client_id == current_user.id
-    ).group_by(PaymentRequest.status).all()
+    )
+
+    if staff_id:
+        query = query.filter(PaymentRequest.locked_by_staff_id == staff_id)
+    if start_date:
+        query = query.filter(PaymentRequest.created_at >= start_date)
+    if end_date:
+        query = query.filter(PaymentRequest.created_at <= end_date)
+
+    payment_stats = query.group_by(PaymentRequest.status).all()
 
     stats_map = {row.status: {"count": row.cnt, "amount": float(row.total)} for row in payment_stats}
 
@@ -225,6 +300,21 @@ def get_statistics(db: Session = Depends(get_db), current_user: User = Depends(r
     pending = stats_map.get(PaymentStatus.PENDING, {"count": 0, "amount": 0.0})
     processing = stats_map.get(PaymentStatus.PROCESSING, {"count": 0, "amount": 0.0})
     failed = stats_map.get(PaymentStatus.FAILED, {"count": 0, "amount": 0.0})
+
+    # Total deposited to all staff
+    total_deposited = db.query(
+        func.coalesce(func.sum(BalanceLog.amount), 0)
+    ).filter(
+        BalanceLog.added_by_client_id == current_user.id
+    ).scalar() or 0
+
+    # Current total balance across all staff
+    total_staff_balance = db.query(
+        func.coalesce(func.sum(User.available_balance), 0)
+    ).filter(
+        User.client_id == current_user.id,
+        User.role == UserRole.STAFF
+    ).scalar() or 0
 
     # Single query for worker + staff counts
     total_users = db.query(func.count(Worker.id)).filter(
@@ -267,5 +357,28 @@ def get_statistics(db: Session = Depends(get_db), current_user: User = Depends(r
         "failed_amount": failed["amount"],
         "total_staff": staff_stats.total if staff_stats else 0,
         "active_staff": staff_stats.active if staff_stats else 0,
-        "top_pending_workers": top_pending
+        "top_pending_workers": top_pending,
+        "total_deposited": float(total_deposited),
+        "total_staff_balance": float(total_staff_balance),
     }
+
+# Workers with pending payment status (for withdrawal tab)
+@router.get("/workers-with-status")
+def get_workers_with_payment_status(db: Session = Depends(get_db), current_user: User = Depends(require_client)):
+    """Get workers with their active payment status to prevent duplicates on frontend."""
+    workers = db.query(Worker).filter(Worker.client_id == current_user.id, Worker.is_active == True).all()
+
+    # Get all workers that have pending/processing payments
+    active_payments = db.query(PaymentRequest.worker_id).filter(
+        PaymentRequest.client_id == current_user.id,
+        PaymentRequest.status.in_([PaymentStatus.PENDING, PaymentStatus.PROCESSING])
+    ).all()
+    blocked_worker_ids = {p.worker_id for p in active_payments}
+
+    result = []
+    for w in workers:
+        worker_data = WorkerResponse.model_validate(w).model_dump()
+        worker_data["has_active_payment"] = w.id in blocked_worker_ids
+        result.append(worker_data)
+
+    return result

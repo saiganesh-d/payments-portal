@@ -26,6 +26,8 @@ class UserResponse(BaseModel):
     username: str
     role: UserRole
     is_active: bool
+    available_balance: float = 0.0
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -50,7 +52,7 @@ class WorkerResponse(BaseModel):
     bank_account_name: Optional[str] = None
     is_active: bool
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -58,7 +60,7 @@ class WorkerResponse(BaseModel):
 class PaymentCreate(BaseModel):
     worker_id: str
     amount: float = Field(gt=0)
-    
+
 class PaymentResponse(BaseModel):
     id: str
     worker_id: str
@@ -71,7 +73,7 @@ class PaymentResponse(BaseModel):
     transaction_ref_no: Optional[str] = None
     staff_comment: Optional[str] = None
     created_at: datetime
-    
+
     worker: Optional[WorkerResponse] = None
 
     class Config:
@@ -81,3 +83,21 @@ class PaymentComplete(BaseModel):
     transaction_ref_no: Optional[str] = None
     receipt_url: Optional[str] = None
     staff_comment: Optional[str] = None
+
+# Balance Schemas
+class BalanceAdd(BaseModel):
+    staff_id: str
+    amount: float = Field(gt=0)
+    note: Optional[str] = None
+
+class BalanceLogResponse(BaseModel):
+    id: str
+    staff_id: str
+    added_by_client_id: str
+    amount: float
+    balance_after: float
+    note: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

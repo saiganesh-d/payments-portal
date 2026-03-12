@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum, JSON, Boolean
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum, JSON, Boolean, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
 import enum
@@ -22,22 +22,29 @@ def generate_uuid():
 
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(String, primary_key=True, default=generate_uuid)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     role = Column(Enum(UserRole), nullable=False)
-    
+
     client_id = Column(String, ForeignKey("users.id"), nullable=True)
-    
+
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
+    # Available balance for staff (client deposits, deducted on payments)
+    available_balance = Column(Float, default=0.0, nullable=False, server_default="0")
+
+    # Session management - single device login for staff
+    session_id = Column(String, nullable=True)
+
     # Staff relationships
     locked_payments = relationship("PaymentRequest", back_populates="locked_by_staff", foreign_keys="[PaymentRequest.locked_by_staff_id]")
-    
-    # Client relationships 
+
+    # Client relationships
     workers = relationship("Worker", back_populates="client")
+    balance_logs = relationship("BalanceLog", back_populates="staff_user", foreign_keys="[BalanceLog.staff_id]")
 
 class Worker(Base):
     """
@@ -86,3 +93,19 @@ class PaymentRequest(Base):
     worker = relationship("Worker", back_populates="payments")
     locked_by_staff = relationship("User", back_populates="locked_payments", foreign_keys=[locked_by_staff_id])
     client = relationship("User", foreign_keys=[client_id])
+
+
+class BalanceLog(Base):
+    """Tracks balance additions by client for staff members."""
+    __tablename__ = "balance_logs"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    staff_id = Column(String, ForeignKey("users.id"), nullable=False)
+    added_by_client_id = Column(String, ForeignKey("users.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    balance_after = Column(Float, nullable=False)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    staff_user = relationship("User", back_populates="balance_logs", foreign_keys=[staff_id])
+    client_user = relationship("User", foreign_keys=[added_by_client_id])

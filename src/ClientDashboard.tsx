@@ -3,9 +3,23 @@ import {
   Plus, CurrencyInr, User as UserIcon, Trash,
   Files, Clock, ChartBar, Key, MagnifyingGlass, ArrowCounterClockwise,
   Bank, QrCode, Eye, WarningCircle, Users, TrendUp, Hourglass, XCircle as XCircleIcon,
-  PencilSimple, FloppyDisk
+  PencilSimple, FloppyDisk, Wallet, CaretDown, CaretUp
 } from '@phosphor-icons/react';
 import api from './api';
+
+function timeAgo(dateStr: string): string {
+  const now = new Date();
+  const then = new Date(dateStr);
+  const diffMs = now.getTime() - then.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return `${Math.floor(diffDays / 30)}mo ago`;
+}
 
 // ==========================================
 // LOADING SKELETON COMPONENT
@@ -65,7 +79,7 @@ export default function ClientDashboard() {
           { key: 'withdrawals', icon: <CurrencyInr size={18} />, label: 'Add Withdrawals' },
           { key: 'pending', icon: <Clock size={18} />, label: 'Pending Withdrawals' },
           { key: 'stats', icon: <ChartBar size={18} />, label: 'Statistics & Statements' },
-          { key: 'admin', icon: <Key size={18} />, label: 'Admin Panel (Staff)' },
+          { key: 'admin', icon: <Key size={18} />, label: 'Staff Management' },
         ].map(tab => (
           <button
             key={tab.key}
@@ -219,9 +233,9 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div style={{ position: 'relative', width: '300px' }}>
-          <MagnifyingGlass style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-secondary)' }} />
-          <input type="text" placeholder="Search by name or User ID..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: '2.5rem', width: '100%' }} />
+        <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
+          <MagnifyingGlass style={{ position: 'absolute', left: 14, top: 14, color: 'var(--text-secondary)' }} size={18} />
+          <input type="text" className="big-search" placeholder="Search by name or User ID..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {!dataLoading && (
@@ -249,7 +263,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
             <tbody>
               {filtered.map(w => (
                 <tr key={w.id}>
-                  <td style={{ fontWeight: 600, fontFamily: 'monospace', fontSize: '0.9rem' }}>{w.worker_id_code || '-'}</td>
+                  <td><span className="user-id-highlight">{w.worker_id_code || '-'}</span></td>
                   <td>{w.name || <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>-</span>}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -319,7 +333,6 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Basic Info (read only) */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Full Name</div>
@@ -327,7 +340,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
                 </div>
                 <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>User ID</div>
-                  <div style={{ fontWeight: 600, fontFamily: 'monospace' }}>{viewWorker.worker_id_code || '-'}</div>
+                  <div className="user-id-highlight">{viewWorker.worker_id_code || '-'}</div>
                 </div>
               </div>
 
@@ -459,7 +472,6 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
             </p>
             <form onSubmit={handleAdd} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-              {/* Required Section */}
               <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-color)', marginBottom: '1rem' }}>
                   Required Information
@@ -513,7 +525,6 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
                 </div>
               </div>
 
-              {/* Optional Bank Details Section */}
               <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Bank size={14} /> Bank Details (Optional)
@@ -549,7 +560,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
 }
 
 // ==========================================
-// BLOCK 2: WITHDRAWAL LIST
+// BLOCK 2: WITHDRAWAL LIST (with duplicate prevention)
 // ==========================================
 function WithdrawListBlock({ onViewStatement }: { onViewStatement: (id: string) => void }) {
   const [workers, setWorkers] = useState<any[]>([]);
@@ -561,7 +572,7 @@ function WithdrawListBlock({ onViewStatement }: { onViewStatement: (id: string) 
   const fetchWorkers = useCallback(async () => {
     setDataLoading(true);
     try {
-      const res = await api.get('/client/workers');
+      const res = await api.get('/client/workers-with-status');
       setWorkers(res.data);
     } finally {
       setDataLoading(false);
@@ -577,8 +588,10 @@ function WithdrawListBlock({ onViewStatement }: { onViewStatement: (id: string) 
     try {
       await api.post('/client/payments', { worker_id: workerId, amount: amt });
       setAmounts(prev => ({ ...prev, [workerId]: '' }));
-      alert('Payment added to queue successfully!');
-    } catch { alert('Error adding payment'); } finally {
+      fetchWorkers(); // refresh to update has_active_payment status
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error adding payment');
+    } finally {
       setSubmitting(null);
     }
   };
@@ -590,9 +603,9 @@ function WithdrawListBlock({ onViewStatement }: { onViewStatement: (id: string) 
 
   return (
     <div>
-      <div style={{ position: 'relative', width: '300px', marginBottom: '1rem' }}>
-        <MagnifyingGlass style={{ position: 'absolute', left: 10, top: 10, color: 'var(--text-secondary)' }} />
-        <input type="text" placeholder="Search users to add payments..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: '2.5rem', width: '100%' }} />
+      <div style={{ position: 'relative', maxWidth: '400px', marginBottom: '1rem' }}>
+        <MagnifyingGlass style={{ position: 'absolute', left: 14, top: 14, color: 'var(--text-secondary)' }} size={18} />
+        <input type="text" className="big-search" placeholder="Search users to add payments..." value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       {dataLoading ? (
@@ -603,28 +616,34 @@ function WithdrawListBlock({ onViewStatement }: { onViewStatement: (id: string) 
             <thead><tr><th>User ID</th><th>Name</th><th>Amount to Pay</th><th>Actions</th></tr></thead>
             <tbody>
               {filtered.map(w => (
-                <tr key={w.id}>
-                  <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{w.worker_id_code || '-'}</td>
+                <tr key={w.id} style={{ opacity: w.has_active_payment ? 0.6 : 1 }}>
+                  <td><span className="user-id-highlight">{w.worker_id_code || '-'}</span></td>
                   <td>{w.name || <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>-</span>}</td>
                   <td>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>₹</span>
-                      <input
-                        type="number"
-                        placeholder="Enter amount"
-                        value={amounts[w.id] || ''}
-                        onChange={e => setAmounts(prev => ({...prev, [w.id]: e.target.value}))}
-                        style={{ width: '140px' }}
-                        min="1"
-                      />
-                      <button
-                        className="btn-primary"
-                        onClick={() => handleAddPayment(w.id)}
-                        disabled={submitting === w.id}
-                      >
-                        {submitting === w.id ? 'Adding...' : 'Add to Queue'}
-                      </button>
-                    </div>
+                    {w.has_active_payment ? (
+                      <span style={{ fontSize: '0.85rem', color: '#d97706', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <Clock size={16} /> Payment already in queue
+                      </span>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>₹</span>
+                        <input
+                          type="number"
+                          placeholder="Enter amount"
+                          value={amounts[w.id] || ''}
+                          onChange={e => setAmounts(prev => ({...prev, [w.id]: e.target.value}))}
+                          style={{ width: '140px', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+                          min="1"
+                        />
+                        <button
+                          className="btn-primary"
+                          onClick={() => handleAddPayment(w.id)}
+                          disabled={submitting === w.id}
+                        >
+                          {submitting === w.id ? 'Adding...' : 'Add to Queue'}
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td>
                     <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem' }} onClick={() => onViewStatement(w.id)} title="View Statements">
@@ -643,13 +662,12 @@ function WithdrawListBlock({ onViewStatement }: { onViewStatement: (id: string) 
 }
 
 // ==========================================
-// BLOCK 3: PENDING WITHDRAWALS
+// BLOCK 3: PENDING WITHDRAWALS (with delete + relative time)
 // ==========================================
 function PendingWithdrawalsBlock() {
   const [payments, setPayments] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [dateStr, setDateStr] = useState(new Date().toISOString().split('T')[0]);
 
   const fetchPayments = useCallback(async () => {
     setDataLoading(true);
@@ -666,20 +684,25 @@ function PendingWithdrawalsBlock() {
   const pendingAll = payments.filter(p => p.status === 'PENDING' || p.status === 'PROCESSING');
 
   const filtered = pendingAll.filter(p => {
-    const matchDate = p.created_at.startsWith(dateStr);
-    const matchStatus = filterStatus === 'ALL' || p.status === filterStatus;
-    return matchDate && matchStatus;
+    return filterStatus === 'ALL' || p.status === filterStatus;
   });
 
-  const oldPendingExists = pendingAll.some(p => !p.created_at.startsWith(dateStr));
-
   const totalPendingAmount = filtered.reduce((sum: number, p: any) => sum + p.amount, 0);
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!confirm('Delete this pending payment? This cannot be undone.')) return;
+    try {
+      await api.delete(`/client/payments/${paymentId}`);
+      fetchPayments();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error deleting payment');
+    }
+  };
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <input type="date" value={dateStr} onChange={e => setDateStr(e.target.value)} />
           <select
             value={filterStatus}
             onChange={e => setFilterStatus(e.target.value)}
@@ -702,26 +725,22 @@ function PendingWithdrawalsBlock() {
         </div>
       </div>
 
-      {!dataLoading && oldPendingExists && (
-        <div style={{ background: '#fef9c3', color: '#854d0e', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <WarningCircle size={18} weight="bold" />
-          There are pending withdrawals from other dates. Change the date filter to view them.
-        </div>
-      )}
-
       {dataLoading ? (
-        <TableSkeleton columns={4} rows={5} />
+        <TableSkeleton columns={5} rows={5} />
       ) : (
         <div className="table-container">
           <table className="table">
-            <thead><tr><th>Time</th><th>User ID / Name</th><th>Amount</th><th>Status</th></tr></thead>
+            <thead><tr><th>Added</th><th>User ID / Name</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {filtered.map(p => (
                 <tr key={p.id}>
-                  <td>{new Date(p.created_at).toLocaleTimeString()}</td>
                   <td>
-                    <div>{p.worker?.name || '-'}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{p.worker?.worker_id_code}</div>
+                    <div style={{ fontWeight: 500 }}>{timeAgo(p.created_at)}</div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{new Date(p.created_at).toLocaleString()}</div>
+                  </td>
+                  <td>
+                    <div className="user-id-highlight">{p.worker?.worker_id_code || '-'}</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{p.worker?.name || '-'}</div>
                   </td>
                   <td style={{ fontWeight: 600, fontSize: '1rem' }}>₹{p.amount.toLocaleString()}</td>
                   <td>
@@ -733,9 +752,21 @@ function PendingWithdrawalsBlock() {
                       {p.status === 'PROCESSING' ? 'Being Processed' : 'Waiting'}
                     </span>
                   </td>
+                  <td>
+                    {p.status === 'PENDING' && (
+                      <button
+                        className="btn-secondary"
+                        style={{ padding: '0.4rem 0.6rem', color: '#dc2626', fontSize: '0.8rem' }}
+                        onClick={() => handleDeletePayment(p.id)}
+                        title="Delete this pending payment"
+                      >
+                        <Trash size={14} /> Delete
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No pending transactions for this date.</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No pending transactions.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -745,12 +776,13 @@ function PendingWithdrawalsBlock() {
 }
 
 // ==========================================
-// BLOCK 4: STATISTICS & STATEMENTS
+// BLOCK 4: STATISTICS & STATEMENTS (with staff filter, deposit tracking)
 // ==========================================
 function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: string | null, onClearUserFilter: () => void }) {
   const [stats, setStats] = useState<any>({});
   const [statements, setStatements] = useState<any[]>([]);
   const [workers, setWorkers] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statementsLoading, setStatementsLoading] = useState(true);
 
@@ -762,22 +794,38 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
 
   const [filterUser, setFilterUser] = useState<string>(initialUserId || '');
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterStaff, setFilterStaff] = useState<string>('');
   const [filterDateStart, setFilterDateStart] = useState<string>(initialUserId ? getDefaultStartDate() : '');
   const [filterDateEnd, setFilterDateEnd] = useState<string>(initialUserId ? new Date().toISOString().split('T')[0] : '');
 
   const fetchGlobalStats = useCallback(async () => {
     setStatsLoading(true);
     try {
-      const res = await api.get('/client/statistics');
+      const params = new URLSearchParams();
+      if (filterStaff) params.append('staff_id', filterStaff);
+      if (filterDateStart) params.append('start_date', new Date(filterDateStart).toISOString());
+      if (filterDateEnd) {
+        const eDate = new Date(filterDateEnd);
+        eDate.setHours(23, 59, 59, 999);
+        params.append('end_date', eDate.toISOString());
+      }
+      const res = await api.get(`/client/statistics?${params.toString()}`);
       setStats(res.data);
     } finally {
       setStatsLoading(false);
     }
-  }, []);
+  }, [filterStaff, filterDateStart, filterDateEnd]);
 
   const fetchWorkers = useCallback(async () => {
     const res = await api.get('/client/workers');
     setWorkers(res.data);
+  }, []);
+
+  const fetchStaff = useCallback(async () => {
+    try {
+      const res = await api.get('/client/staff');
+      setStaffList(res.data);
+    } catch {}
   }, []);
 
   const fetchStatements = useCallback(async () => {
@@ -786,6 +834,7 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
       const params = new URLSearchParams();
       if (filterUser) params.append('worker_id', filterUser);
       if (filterStatus) params.append('status', filterStatus);
+      if (filterStaff) params.append('staff_id', filterStaff);
       if (filterDateStart) params.append('start_date', new Date(filterDateStart).toISOString());
       if (filterDateEnd) {
         const eDate = new Date(filterDateEnd);
@@ -797,12 +846,13 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
     } finally {
       setStatementsLoading(false);
     }
-  }, [filterUser, filterStatus, filterDateStart, filterDateEnd]);
+  }, [filterUser, filterStatus, filterStaff, filterDateStart, filterDateEnd]);
 
   useEffect(() => {
     fetchGlobalStats();
     fetchWorkers();
-  }, [fetchGlobalStats, fetchWorkers]);
+    fetchStaff();
+  }, [fetchGlobalStats, fetchWorkers, fetchStaff]);
 
   useEffect(() => {
     fetchStatements();
@@ -829,41 +879,56 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
 
   return (
     <div>
-      {/* Stats Cards */}
+      {/* Overview cards */}
       {statsLoading ? (
-        <StatCardSkeleton count={6} />
+        <StatCardSkeleton count={8} />
       ) : (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-            <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                <TrendUp size={16} /> Completed
+          {/* Deposit overview */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+            <div style={{ background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)', padding: '1.25rem', borderRadius: 'var(--radius-lg)', color: 'white' }}>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Wallet size={16} /> Total Deposited to Staff
               </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#16a34a' }}>₹{(stats.total_withdrawal_amount || 0).toLocaleString()}</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{stats.total_transactions || 0} transactions</div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 700 }}>₹{(stats.total_deposited || 0).toLocaleString()}</div>
             </div>
+            <div style={{ background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)', padding: '1.25rem', borderRadius: 'var(--radius-lg)', color: 'white' }}>
+              <div style={{ fontSize: '0.85rem', opacity: 0.9, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <TrendUp size={16} /> Total Withdrawn (Completed)
+              </div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 700 }}>₹{(stats.total_withdrawal_amount || 0).toLocaleString()}</div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.8, marginTop: '0.25rem' }}>{stats.total_transactions || 0} transactions</div>
+            </div>
+            <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Wallet size={16} /> Remaining Staff Balance
+              </div>
+              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--accent-color)' }}>₹{(stats.total_staff_balance || 0).toLocaleString()}</div>
+            </div>
+          </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
             <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                 <Hourglass size={16} /> Pending
               </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#d97706' }}>₹{(stats.pending_amount || 0).toLocaleString()}</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{stats.pending_count || 0} payments waiting</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#d97706' }}>₹{(stats.pending_amount || 0).toLocaleString()}</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{stats.pending_count || 0} waiting</div>
             </div>
 
             <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                 <Clock size={16} /> Processing
               </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#2563eb' }}>₹{(stats.processing_amount || 0).toLocaleString()}</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{stats.processing_count || 0} being handled</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#2563eb' }}>₹{(stats.processing_amount || 0).toLocaleString()}</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{stats.processing_count || 0} active</div>
             </div>
 
             <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                 <XCircleIcon size={16} /> Failed
               </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#dc2626' }}>₹{(stats.failed_amount || 0).toLocaleString()}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: '#dc2626' }}>₹{(stats.failed_amount || 0).toLocaleString()}</div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{stats.failed_count || 0} failed</div>
             </div>
 
@@ -871,15 +936,15 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                 <Users size={16} /> Users
               </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700 }}>{stats.active_workers || 0}</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>active workers</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{stats.active_workers || 0}</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>active</div>
             </div>
 
             <div style={{ background: 'var(--bg-secondary)', padding: '1.25rem', borderRadius: 'var(--radius-lg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                 <Key size={16} /> Staff
               </div>
-              <div style={{ fontSize: '1.75rem', fontWeight: 700 }}>{stats.active_staff || 0}<span style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--text-secondary)' }}>/{stats.total_staff || 0}</span></div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{stats.active_staff || 0}<span style={{ fontSize: '1rem', fontWeight: 400, color: 'var(--text-secondary)' }}>/{stats.total_staff || 0}</span></div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>active / total</div>
             </div>
           </div>
@@ -897,7 +962,7 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
                   }}
                   onClick={() => { setFilterUser(w.worker_id); setFilterDateStart(''); setFilterDateEnd(''); setFilterStatus('PENDING'); }}
                   >
-                    <span style={{ fontWeight: 600 }}>{w.name || w.worker_id_code}</span>
+                    <span className="user-id-highlight" style={{ fontSize: '0.85rem' }}>{w.worker_id_code || w.name}</span>
                     <span style={{ color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
                       {w.pending_count} pending | ₹{w.pending_amount.toLocaleString()}
                     </span>
@@ -913,19 +978,27 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', marginTop: '1rem' }}>
         <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem' }}><Files size={20} /> Statements</h3>
         <button className="btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }} onClick={() => {
-            setFilterUser(''); setFilterStatus(''); setFilterDateStart(''); setFilterDateEnd('');
+            setFilterUser(''); setFilterStatus(''); setFilterStaff(''); setFilterDateStart(''); setFilterDateEnd('');
             onClearUserFilter();
         }}>
             Clear Filters
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '0.75rem', marginBottom: '1rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.75rem', marginBottom: '1rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
           <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>User</label>
           <select value={filterUser} onChange={e => setFilterUser(e.target.value)} style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.85rem' }}>
             <option value="">All Users</option>
-            {workers.map(w => <option key={w.id} value={w.id}>{w.name || w.worker_id_code} ({w.worker_id_code || 'No ID'})</option>)}
+            {workers.map(w => <option key={w.id} value={w.id}>{w.worker_id_code || w.name} ({w.name || 'No Name'})</option>)}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+          <label style={{ fontSize: '0.8rem', fontWeight: 600 }}>Staff</label>
+          <select value={filterStaff} onChange={e => setFilterStaff(e.target.value)} style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.85rem' }}>
+            <option value="">All Staff</option>
+            {staffList.map(s => <option key={s.id} value={s.id}>{s.username}</option>)}
           </select>
         </div>
 
@@ -969,10 +1042,13 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
             <tbody>
               {statements.map(tx => (
                 <tr key={tx.id}>
-                  <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{new Date(tx.created_at).toLocaleString()}</td>
+                  <td style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                    <div>{timeAgo(tx.created_at)}</div>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>{new Date(tx.created_at).toLocaleString()}</div>
+                  </td>
                   <td>
-                    <div style={{ fontWeight: 500 }}>{tx.worker?.name || '-'}</div>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{tx.worker?.worker_id_code}</div>
+                    <div className="user-id-highlight">{tx.worker?.worker_id_code || '-'}</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{tx.worker?.name}</div>
                   </td>
                   <td style={{ fontWeight: 700, fontSize: '1rem' }}>₹{tx.amount.toLocaleString()}</td>
                   <td>
@@ -1017,7 +1093,7 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
 }
 
 // ==========================================
-// BLOCK 5: ADMIN PANEL (STAFF MANAGEMENT)
+// BLOCK 5: ADMIN PANEL (STAFF MANAGEMENT + Balance)
 // ==========================================
 function AdminPanelBlock() {
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -1025,6 +1101,11 @@ function AdminPanelBlock() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
+  const [balanceAmounts, setBalanceAmounts] = useState<Record<string, string>>({});
+  const [balanceNotes, setBalanceNotes] = useState<Record<string, string>>({});
+  const [addingBalance, setAddingBalance] = useState<string | null>(null);
+  const [balanceLogs, setBalanceLogs] = useState<Record<string, any[]>>({});
+  const [showLogs, setShowLogs] = useState<string | null>(null);
 
   const fetchStaff = useCallback(async () => {
     setDataLoading(true);
@@ -1070,6 +1151,38 @@ function AdminPanelBlock() {
     } catch { alert('Error resetting password'); }
   };
 
+  const handleAddBalance = async (staffId: string) => {
+    const amt = parseFloat(balanceAmounts[staffId]);
+    if (!amt || amt <= 0) return alert('Enter a valid amount');
+    setAddingBalance(staffId);
+    try {
+      await api.post(`/client/staff/${staffId}/add-balance`, {
+        staff_id: staffId,
+        amount: amt,
+        note: balanceNotes[staffId] || null
+      });
+      setBalanceAmounts(prev => ({ ...prev, [staffId]: '' }));
+      setBalanceNotes(prev => ({ ...prev, [staffId]: '' }));
+      fetchStaff();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Error adding balance');
+    } finally {
+      setAddingBalance(null);
+    }
+  };
+
+  const handleViewBalanceLogs = async (staffId: string) => {
+    if (showLogs === staffId) {
+      setShowLogs(null);
+      return;
+    }
+    try {
+      const res = await api.get(`/client/staff/${staffId}/balance-logs`);
+      setBalanceLogs(prev => ({ ...prev, [staffId]: res.data }));
+      setShowLogs(staffId);
+    } catch { alert('Error fetching balance logs'); }
+  };
+
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 400px) 1fr', gap: '2rem' }}>
@@ -1077,7 +1190,7 @@ function AdminPanelBlock() {
         <div style={{ background: 'var(--bg-secondary)', padding: '2rem', borderRadius: 'var(--radius-lg)' }}>
           <h3 style={{ marginBottom: '0.75rem' }}>Onboard Staff Member</h3>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
-            Create login credentials for your outsourcing team so they can process payments.
+            Create login credentials for your team so they can process payments.
           </p>
           <form onSubmit={handleCreateStaff} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
@@ -1095,42 +1208,101 @@ function AdminPanelBlock() {
         </div>
 
         <div>
-          <h3 style={{ marginBottom: '1rem' }}>Manage Existing Staff</h3>
+          <h3 style={{ marginBottom: '1rem' }}>Manage Staff</h3>
           {dataLoading ? (
-            <TableSkeleton columns={4} rows={3} />
+            <TableSkeleton columns={5} rows={3} />
           ) : (
             <div className="table-container">
               <table className="table">
-                <thead><tr><th>Username</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Username</th><th>Status</th><th>Balance</th><th>Created</th><th>Actions</th></tr></thead>
                 <tbody>
                   {staffList.map(staff => (
-                    <tr key={staff.id}>
-                      <td style={{ fontWeight: 600 }}>{staff.username}</td>
-                      <td>
-                        <span style={{
-                            padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', fontWeight: 600,
-                            background: staff.is_active ? '#dcfce7' : '#fee2e2',
-                            color: staff.is_active ? '#166534' : '#991b1b'
-                         }}>
-                            {staff.is_active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                          {new Date(staff.created_at).toLocaleDateString()}
-                      </td>
-                      <td>
-                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                             <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }} onClick={() => handleToggleActive(staff.id, staff.is_active)}>
-                                 {staff.is_active ? 'Deactivate' : 'Activate'}
-                             </button>
-                             <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem', color: 'var(--accent-color)' }} onClick={() => handleResetPassword(staff.id)}>
-                                 Reset Password
-                             </button>
-                         </div>
-                      </td>
-                    </tr>
+                    <>
+                      <tr key={staff.id}>
+                        <td style={{ fontWeight: 600 }}>{staff.username}</td>
+                        <td>
+                          <span style={{
+                              padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', fontWeight: 600,
+                              background: staff.is_active ? '#dcfce7' : '#fee2e2',
+                              color: staff.is_active ? '#166534' : '#991b1b'
+                           }}>
+                              {staff.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 700, color: (staff.available_balance || 0) > 0 ? '#16a34a' : '#dc2626', fontSize: '1.05rem' }}>
+                            ₹{(staff.available_balance || 0).toLocaleString()}
+                          </div>
+                        </td>
+                        <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                            {timeAgo(staff.created_at)}
+                        </td>
+                        <td>
+                           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                               <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }} onClick={() => handleToggleActive(staff.id, staff.is_active)}>
+                                   {staff.is_active ? 'Deactivate' : 'Activate'}
+                               </button>
+                               <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem', color: 'var(--accent-color)' }} onClick={() => handleResetPassword(staff.id)}>
+                                   Reset Password
+                               </button>
+                               <button className="btn-secondary" style={{ padding: '0.4rem 0.6rem', fontSize: '0.8rem' }} onClick={() => handleViewBalanceLogs(staff.id)}>
+                                   {showLogs === staff.id ? <CaretUp size={14} /> : <CaretDown size={14} />} History
+                               </button>
+                           </div>
+                        </td>
+                      </tr>
+                      {/* Add balance row */}
+                      <tr key={`${staff.id}-balance`}>
+                        <td colSpan={5} style={{ background: 'var(--bg-secondary)', padding: '0.75rem 1rem' }}>
+                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Wallet size={16} color="var(--accent-color)" />
+                            <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Add Balance:</span>
+                            <input
+                              type="number"
+                              placeholder="Amount"
+                              value={balanceAmounts[staff.id] || ''}
+                              onChange={e => setBalanceAmounts(prev => ({...prev, [staff.id]: e.target.value}))}
+                              style={{ width: '120px', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}
+                              min="1"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Note (optional)"
+                              value={balanceNotes[staff.id] || ''}
+                              onChange={e => setBalanceNotes(prev => ({...prev, [staff.id]: e.target.value}))}
+                              style={{ width: '160px', padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}
+                            />
+                            <button className="btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => handleAddBalance(staff.id)} disabled={addingBalance === staff.id}>
+                              <Plus size={14} /> {addingBalance === staff.id ? 'Adding...' : 'Add'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {/* Balance logs */}
+                      {showLogs === staff.id && balanceLogs[staff.id] && (
+                        <tr key={`${staff.id}-logs`}>
+                          <td colSpan={5} style={{ padding: '0.5rem 1rem', background: 'var(--bg-tertiary)' }}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>Balance History</div>
+                            {balanceLogs[staff.id].length === 0 ? (
+                              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '0.5rem 0' }}>No balance additions yet.</div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                {balanceLogs[staff.id].map((log: any) => (
+                                  <div key={log.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.35rem 0', borderBottom: '1px solid var(--border-color)' }}>
+                                    <span style={{ color: '#16a34a', fontWeight: 600 }}>+₹{log.amount.toLocaleString()}</span>
+                                    <span style={{ color: 'var(--text-secondary)' }}>Balance: ₹{log.balance_after.toLocaleString()}</span>
+                                    {log.note && <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>{log.note}</span>}
+                                    <span style={{ color: 'var(--text-secondary)' }}>{timeAgo(log.created_at)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   ))}
-                  {staffList.length === 0 && <tr><td colSpan={4} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-secondary)' }}>No staff enrolled yet.</td></tr>}
+                  {staffList.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-secondary)' }}>No staff enrolled yet.</td></tr>}
                 </tbody>
               </table>
             </div>

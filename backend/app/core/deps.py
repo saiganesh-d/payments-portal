@@ -13,21 +13,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     payload = decode_access_token(token)
     if payload is None:
         raise credentials_exception
-        
+
     username: str = payload.get("sub")
     role: str = payload.get("role")
-    
+    session_id: str = payload.get("session_id")
+
     if username is None:
         raise credentials_exception
-        
+
     user = db.query(User).filter(User.username == username).first()
     if user is None or not user.is_active:
         raise credentials_exception
-        
+
+    # Single device enforcement for staff
+    if user.role == "STAFF" and user.session_id and session_id != user.session_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. You have been logged in from another device.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return user
 
 def require_admin(current_user: User = Depends(get_current_user)):
