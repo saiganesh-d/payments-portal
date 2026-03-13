@@ -4,7 +4,9 @@
       "Bash(npx tsc:*)",
       "Bash(npx vite:*)",
       "Bash(ls /c/Users/saiga/Desktop/testture/backend/*.txt /c/Users/saiga/Desktop/testture/backend/*.toml 2>/dev/null; ls /c/Users/saiga/Desktop/testture/Dockerfile 2>/dev/null)",
-      "Bash(ls /c/Users/saiga/Desktop/testture/backend/venv/lib/python*/site-packages 2>/dev/null | head -5; pip freeze 2>/dev/null | head -5)"
+      "Bash(ls /c/Users/saiga/Desktop/testture/backend/venv/lib/python*/site-packages 2>/dev/null | head -5; pip freeze 2>/dev/null | head -5)",
+      "Bash(find /c/Users/saiga/Desktop/testture/backend -name \"*.py\" -type f ! -path \"*/venv/*\" | xargs grep -l \"S3\\\\|s3\\\\|boto\\\\|aws\\\\|uploads\" 2>/dev/null)",
+      "Bash(find /c/Users/saiga/Desktop/testture -maxdepth 2 -name \"*.json\" -o -name \"*.yml\" -o -name \"*.yaml\" -o -name \".env*\" 2>/dev/null | grep -v node_modules | grep -v venv | grep -v dist)"
     ]
   }
 }

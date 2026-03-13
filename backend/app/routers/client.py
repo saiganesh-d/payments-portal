@@ -199,18 +199,12 @@ def delete_worker(worker_id: str, db: Session = Depends(get_db), current_user: U
     return {"message": "Worker deleted successfully"}
 
 from fastapi import UploadFile, File
-import shutil
-import os
-import uuid
+from app.core.s3 import upload_file_to_s3
 
 @router.post("/workers/upload-qr")
 async def upload_qr(file: UploadFile = File(...), current_user: User = Depends(require_client)):
-    ext = file.filename.split('.')[-1]
-    filename = f"{uuid.uuid4()}.{ext}"
-    filepath = os.path.join("uploads", filename)
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    return {"url": f"/uploads/{filename}"}
+    url = await upload_file_to_s3(file, folder="qr-codes")
+    return {"url": url}
 
 # --- PAYMENT MANAGEMENT & STATEMENTS ---
 @router.post("/payments", response_model=PaymentResponse)

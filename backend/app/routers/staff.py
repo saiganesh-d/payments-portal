@@ -47,6 +47,7 @@ def get_pending_payments(db: Session = Depends(get_db), current_user: User = Dep
 def lock_payment(payment_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_staff)):
     stmt = (
         select(PaymentRequest)
+        .options(joinedload(PaymentRequest.worker))
         .filter(PaymentRequest.id == payment_id, PaymentRequest.status == PaymentStatus.PENDING)
         .with_for_update(skip_locked=True)
     )
@@ -54,7 +55,7 @@ def lock_payment(payment_id: str, db: Session = Depends(get_db), current_user: U
     payment = db.scalars(stmt).first()
 
     if not payment:
-        existing = db.query(PaymentRequest).filter(PaymentRequest.id == payment_id).first()
+        existing = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(PaymentRequest.id == payment_id).first()
         if existing and existing.status == PaymentStatus.PROCESSING:
             if existing.locked_by_staff_id == current_user.id:
                 return existing
@@ -70,7 +71,9 @@ def lock_payment(payment_id: str, db: Session = Depends(get_db), current_user: U
     payment.locked_at = datetime.utcnow()
 
     db.commit()
-    db.refresh(payment)
+    payment = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(
+        PaymentRequest.id == payment_id
+    ).first()
     return payment
 
 @router.post("/payments/{payment_id}/complete", response_model=PaymentResponse)
