@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  LockKey, CheckCircle, Clock, XCircle, ArrowLeft,
-  MagnifyingGlass, ChartBar, CurrencyInr, TrendUp, Wallet,
-  Users, CaretUp, CaretDown, ArrowsDownUp
+  LockKey, CheckCircle, XCircle, ArrowLeft,
+  MagnifyingGlass, ChartBar, CurrencyInr, TrendUp,
+  CaretUp, CaretDown, ArrowsDownUp
 } from '@phosphor-icons/react';
 import api from './api';
 
