@@ -103,7 +103,8 @@ export default function StaffDashboard() {
       setUtr(''); setComment('');
       fetchPayments();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Someone else already grabbed this payment.');
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : 'Someone else already grabbed this payment.');
       fetchPayments();
     } finally {
       setLoading(false);
@@ -154,7 +155,8 @@ export default function StaffDashboard() {
       fetchPayments();
       fetchBalance();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to complete payment.');
+      const detail = err.response?.data?.detail;
+      setError(typeof detail === 'string' ? detail : 'Failed to complete payment.');
     } finally {
       setLoading(false);
     }

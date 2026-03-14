@@ -11,7 +11,8 @@
       "Bash(grep -r \"client\\\\|Client\\\\|CLIENT\" /c/Users/saiga/Desktop/testture/backend/app/routers/*.py | head -30)",
       "Bash(cd C:/Users/saiga/Desktop/testture/backend && python -c \"from app.models.core import User; print\\('Models OK'\\)\" 2>&1 && python -c \"from app.schemas.core import StaffCreate, UserResponse; print\\('Schemas OK'\\)\" 2>&1 && python -c \"from app.routers.client import router; print\\('Client router OK'\\)\" 2>&1 && python -c \"from app.routers.staff import router; print\\('Staff router OK'\\)\" 2>&1)",
       "Bash(cd C:/Users/saiga/Desktop/testture/backend && python -c \"import ast; ast.parse\\(open\\('app/models/core.py'\\).read\\(\\)\\); print\\('models OK'\\)\" && python -c \"import ast; ast.parse\\(open\\('app/schemas/core.py'\\).read\\(\\)\\); print\\('schemas OK'\\)\" && python -c \"import ast; ast.parse\\(open\\('app/routers/client.py'\\).read\\(\\)\\); print\\('client OK'\\)\" && python -c \"import ast; ast.parse\\(open\\('app/routers/staff.py'\\).read\\(\\)\\); print\\('staff OK'\\)\" && python -c \"import ast; ast.parse\\(open\\('seed.py'\\).read\\(\\)\\); print\\('seed OK'\\)\")",
-      "Bash(cd C:/Users/saiga/Desktop/testture/backend && python -c \"import ast; ast.parse\\(open\\('app/routers/client.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
+      "Bash(cd C:/Users/saiga/Desktop/testture/backend && python -c \"import ast; ast.parse\\(open\\('app/routers/client.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(cd C:/Users/saiga/Desktop/testture/backend && python -c \"import ast; ast.parse\\(open\\('app/routers/staff.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
     ]
   }
 }

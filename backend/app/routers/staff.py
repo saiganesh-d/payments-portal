@@ -41,10 +41,12 @@ def get_pending_payments(db: Session = Depends(get_db), current_user: User = Dep
         )
     )
 
+    eager_opts = [joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)]
+
     if current_user.staff_scope == "all":
-        payments = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(base_filter).all()
+        payments = db.query(PaymentRequest).options(*eager_opts).filter(base_filter).all()
     else:
-        payments = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(
+        payments = db.query(PaymentRequest).options(*eager_opts).filter(
             base_filter,
             PaymentRequest.client_id == current_user.client_id
         ).all()
@@ -67,7 +69,9 @@ def lock_payment(payment_id: str, db: Session = Depends(get_db), current_user: U
     payment = db.scalars(stmt).first()
 
     if not payment:
-        existing = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(PaymentRequest.id == payment_id).first()
+        existing = db.query(PaymentRequest).options(
+            joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)
+        ).filter(PaymentRequest.id == payment_id).first()
         if existing and existing.status == PaymentStatus.PROCESSING:
             if existing.locked_by_staff_id == current_user.id:
                 return existing
@@ -83,9 +87,9 @@ def lock_payment(payment_id: str, db: Session = Depends(get_db), current_user: U
     payment.locked_at = datetime.utcnow()
 
     db.commit()
-    payment = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(
-        PaymentRequest.id == payment_id
-    ).first()
+    payment = db.query(PaymentRequest).options(
+        joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)
+    ).filter(PaymentRequest.id == payment_id).first()
     return payment
 
 @router.post("/payments/{payment_id}/complete", response_model=PaymentResponse)
@@ -111,8 +115,9 @@ def complete_payment(payment_id: str, data: PaymentComplete, db: Session = Depen
     payment.completed_at = datetime.utcnow()
 
     db.commit()
-    db.refresh(payment)
-
+    payment = db.query(PaymentRequest).options(
+        joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)
+    ).filter(PaymentRequest.id == payment_id).first()
     return payment
 
 @router.post("/payments/{payment_id}/fail", response_model=PaymentResponse)
@@ -131,7 +136,9 @@ def fail_payment(payment_id: str, data: PaymentComplete, db: Session = Depends(g
     payment.completed_at = datetime.utcnow()
 
     db.commit()
-    db.refresh(payment)
+    payment = db.query(PaymentRequest).options(
+        joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)
+    ).filter(PaymentRequest.id == payment_id).first()
     return payment
 
 @router.post("/payments/{payment_id}/release", response_model=PaymentResponse)
@@ -150,7 +157,9 @@ def release_lock(payment_id: str, db: Session = Depends(get_db), current_user: U
     payment.locked_at = None
 
     db.commit()
-    db.refresh(payment)
+    payment = db.query(PaymentRequest).options(
+        joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)
+    ).filter(PaymentRequest.id == payment_id).first()
     return payment
 
 @router.get("/my-transactions")
