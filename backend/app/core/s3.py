@@ -28,7 +28,12 @@ async def upload_file_to_s3(file: UploadFile, folder: str = "qr-codes") -> str:
         Key=key,
         Body=file_bytes,
         ContentType=content_type,
-        ACL="public-read",
     )
 
-    return f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{key}"
+    # Return presigned URL (valid for 7 days) since bucket doesn't allow public ACLs
+    presigned_url = s3_client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": S3_BUCKET, "Key": key},
+        ExpiresIn=604800,  # 7 days
+    )
+    return presigned_url
