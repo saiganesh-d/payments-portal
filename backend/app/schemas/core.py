@@ -48,7 +48,7 @@ class WorkerCreate(BaseModel):
 class WorkerResponse(BaseModel):
     id: str
     client_id: str
-    name: str
+    name: Optional[str] = None
     worker_id_code: Optional[str] = None
     qr_code_url: Optional[str] = None
     bank_account_number: Optional[str] = None
