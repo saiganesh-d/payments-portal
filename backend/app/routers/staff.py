@@ -53,10 +53,14 @@ def get_pending_payments(db: Session = Depends(get_db), current_user: User = Dep
 
 @router.post("/payments/{payment_id}/lock", response_model=PaymentResponse)
 def lock_payment(payment_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_staff)):
+    # Lock without JOIN to avoid "FOR UPDATE cannot be applied to nullable side of outer join"
+    lock_filters = [PaymentRequest.id == payment_id, PaymentRequest.status == PaymentStatus.PENDING]
+    if current_user.staff_scope != "all":
+        lock_filters.append(PaymentRequest.client_id == current_user.client_id)
+
     stmt = (
         select(PaymentRequest)
-        .options(joinedload(PaymentRequest.worker))
-        .filter(PaymentRequest.id == payment_id, PaymentRequest.status == PaymentStatus.PENDING)
+        .filter(*lock_filters)
         .with_for_update(skip_locked=True)
     )
 
