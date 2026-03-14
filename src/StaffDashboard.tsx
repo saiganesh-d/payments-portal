@@ -162,6 +162,41 @@ export default function StaffDashboard() {
     }
   };
 
+  // ---- Computed values (must be before any early return to preserve hook order) ----
+  const pendingPayments = payments.filter(p => p.status === 'PENDING');
+  const filteredPending = searchQueue
+    ? pendingPayments.filter(p =>
+        (p.worker?.worker_id_code || '').toLowerCase().includes(searchQueue.toLowerCase()) ||
+        (p.worker?.name || '').toLowerCase().includes(searchQueue.toLowerCase())
+      )
+    : pendingPayments;
+
+  const sortedPending = useMemo(() => {
+    if (!sortField) return filteredPending;
+    return [...filteredPending].sort((a, b) => {
+      let valA: any, valB: any;
+      if (sortField === 'amount') {
+        valA = a.amount;
+        valB = b.amount;
+      } else {
+        valA = new Date(a.created_at).getTime();
+        valB = new Date(b.created_at).getTime();
+      }
+      return sortDir === 'asc' ? valA - valB : valB - valA;
+    });
+  }, [filteredPending, sortField, sortDir]);
+
+  const handleSort = (field: 'amount' | 'created_at') => {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDir('desc');
+    }
+  };
+
+  const totalPendingAmount = pendingPayments.reduce((s: number, p: any) => s + p.amount, 0);
+
   // ---- Processing view (mobile-first) ----
   if (processingPayment) {
     const worker = processingPayment.worker;
@@ -282,40 +317,6 @@ export default function StaffDashboard() {
   }
 
   // ---- Queue view ----
-  const pendingPayments = payments.filter(p => p.status === 'PENDING');
-  const filteredPending = searchQueue
-    ? pendingPayments.filter(p =>
-        (p.worker?.worker_id_code || '').toLowerCase().includes(searchQueue.toLowerCase()) ||
-        (p.worker?.name || '').toLowerCase().includes(searchQueue.toLowerCase())
-      )
-    : pendingPayments;
-
-  // Sorting
-  const sortedPending = useMemo(() => {
-    if (!sortField) return filteredPending;
-    return [...filteredPending].sort((a, b) => {
-      let valA: any, valB: any;
-      if (sortField === 'amount') {
-        valA = a.amount;
-        valB = b.amount;
-      } else {
-        valA = new Date(a.created_at).getTime();
-        valB = new Date(b.created_at).getTime();
-      }
-      return sortDir === 'asc' ? valA - valB : valB - valA;
-    });
-  }, [filteredPending, sortField, sortDir]);
-
-  const handleSort = (field: 'amount' | 'created_at') => {
-    if (sortField === field) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDir('desc');
-    }
-  };
-
-  const totalPendingAmount = pendingPayments.reduce((s: number, p: any) => s + p.amount, 0);
 
   return (
     <div>
