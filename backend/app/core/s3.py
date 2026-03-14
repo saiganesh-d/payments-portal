@@ -28,6 +28,7 @@ async def upload_file_to_s3(file: UploadFile, folder: str = "qr-codes") -> str:
         Key=key,
         Body=file_bytes,
         ContentType=content_type,
+        ACL="public-read",
     )
 
     return f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{key}"
