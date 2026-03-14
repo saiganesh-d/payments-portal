@@ -22,11 +22,13 @@ def create_staff(staff_data: StaffCreate, db: Session = Depends(get_db), current
     if db.query(User).filter(User.username == staff_data.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
 
+    scope = staff_data.scope if staff_data.scope in ("own_client", "all") else "own_client"
     new_staff = User(
         username=staff_data.username,
         hashed_password=get_password_hash(staff_data.password),
         role=UserRole.STAFF,
-        client_id=current_user.id
+        client_id=current_user.id,
+        staff_scope=scope
     )
     db.add(new_staff)
     db.commit()

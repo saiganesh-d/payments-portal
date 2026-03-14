@@ -9,7 +9,7 @@ from app.routers import auth, client, staff
 # Create DB tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Payment Portal")
+app = FastAPI(title="7basic")
 
 app.add_middleware(
     CORSMiddleware,

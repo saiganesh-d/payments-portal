@@ -15,6 +15,7 @@ class TokenData(BaseModel):
 class StaffCreate(BaseModel):
     username: str
     password: str
+    scope: str = "own_client"  # "own_client" or "all"
 
 class UserCreate(BaseModel):
     username: str
@@ -27,6 +28,8 @@ class UserResponse(BaseModel):
     role: UserRole
     is_active: bool
     available_balance: float = 0.0
+    staff_scope: Optional[str] = "own_client"
+    client_id: Optional[str] = None
     created_at: Optional[datetime] = None
 
     class Config:

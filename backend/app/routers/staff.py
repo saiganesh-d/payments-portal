@@ -31,15 +31,23 @@ def get_pending_payments(db: Session = Depends(get_db), current_user: User = Dep
         db.commit()
 
     # 2. Fetch all fully PENDING, PLUS anything currently PROCESSING locked by ME.
-    payments = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(
-        or_(
-            PaymentRequest.status == PaymentStatus.PENDING,
-            and_(
-                PaymentRequest.status == PaymentStatus.PROCESSING,
-                PaymentRequest.locked_by_staff_id == current_user.id
-            )
+    #    If staff_scope is "own_client", only show payments from the staff's assigned client.
+    #    If staff_scope is "all", show payments from all clients.
+    base_filter = or_(
+        PaymentRequest.status == PaymentStatus.PENDING,
+        and_(
+            PaymentRequest.status == PaymentStatus.PROCESSING,
+            PaymentRequest.locked_by_staff_id == current_user.id
         )
-    ).all()
+    )
+
+    if current_user.staff_scope == "all":
+        payments = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(base_filter).all()
+    else:
+        payments = db.query(PaymentRequest).options(joinedload(PaymentRequest.worker)).filter(
+            base_filter,
+            PaymentRequest.client_id == current_user.client_id
+        ).all()
 
     return payments
 

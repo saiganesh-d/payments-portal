@@ -785,7 +785,7 @@ function PendingWithdrawalsBlock() {
                   </td>
                 </tr>
               ))}
-              {filtered.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No pending transactions.</td></tr>}
+              {filtered.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>No pending transactions.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1121,6 +1121,7 @@ function AdminPanelBlock() {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [scope, setScope] = useState('own_client');
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
   const [balanceAmounts, setBalanceAmounts] = useState<Record<string, string>>({});
@@ -1146,9 +1147,9 @@ function AdminPanelBlock() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post('/client/staff', { username, password });
+      await api.post('/client/staff', { username, password, scope });
       alert('Staff account created successfully!');
-      setUsername(''); setPassword('');
+      setUsername(''); setPassword(''); setScope('own_client');
       fetchStaff();
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Error creating staff');
@@ -1226,6 +1227,13 @@ function AdminPanelBlock() {
               <label>Password</label>
               <input required type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Choose a strong password" />
             </div>
+            <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '180px' }}>
+              <label>Withdrawal Access</label>
+              <select value={scope} onChange={e => setScope(e.target.value)} style={{ padding: '0.6rem', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-primary)', fontSize: '0.9rem', width: '100%' }}>
+                <option value="own_client">This Client Only</option>
+                <option value="all">All Clients</option>
+              </select>
+            </div>
             <button type="submit" className="btn-primary" disabled={loading} style={{ height: '42px' }}>
               {loading ? 'Creating...' : 'Create Staff Account'}
             </button>
@@ -1235,11 +1243,11 @@ function AdminPanelBlock() {
 
       <div>
           {dataLoading ? (
-            <TableSkeleton columns={5} rows={3} />
+            <TableSkeleton columns={6} rows={3} />
           ) : (
             <div className="table-container">
               <table className="table">
-                <thead><tr><th>Username</th><th>Status</th><th>Balance</th><th>Created</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Username</th><th>Status</th><th>Access</th><th>Balance</th><th>Created</th><th>Actions</th></tr></thead>
                 <tbody>
                   {staffList.map(staff => (
                     <>
@@ -1252,6 +1260,15 @@ function AdminPanelBlock() {
                               color: staff.is_active ? '#166534' : '#991b1b'
                            }}>
                               {staff.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{
+                              padding: '0.2rem 0.5rem', borderRadius: 'var(--radius-full)', fontSize: '0.8rem', fontWeight: 600,
+                              background: staff.staff_scope === 'all' ? '#dbeafe' : '#f3e8ff',
+                              color: staff.staff_scope === 'all' ? '#1e40af' : '#7c3aed'
+                           }}>
+                              {staff.staff_scope === 'all' ? 'All Clients' : 'This Client'}
                           </span>
                         </td>
                         <td>
@@ -1278,7 +1295,7 @@ function AdminPanelBlock() {
                       </tr>
                       {/* Add balance row */}
                       <tr key={`${staff.id}-balance`}>
-                        <td colSpan={5} style={{ background: 'var(--bg-secondary)', padding: '0.75rem 1rem' }}>
+                        <td colSpan={6} style={{ background: 'var(--bg-secondary)', padding: '0.75rem 1rem' }}>
                           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                             <Wallet size={16} color="var(--accent-color)" />
                             <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>Add Balance:</span>
@@ -1306,7 +1323,7 @@ function AdminPanelBlock() {
                       {/* Full history (deposits + payments) */}
                       {showHistory === staff.id && staffHistory[staff.id] && (
                         <tr key={`${staff.id}-history`}>
-                          <td colSpan={5} style={{ padding: '0.75rem 1rem', background: 'var(--bg-tertiary)' }}>
+                          <td colSpan={6} style={{ padding: '0.75rem 1rem', background: 'var(--bg-tertiary)' }}>
                             <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>Transaction History (Bank Statement)</div>
                             {staffHistory[staff.id].length === 0 ? (
                               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '0.5rem 0' }}>No history yet.</div>
@@ -1352,7 +1369,7 @@ function AdminPanelBlock() {
                       )}
                     </>
                   ))}
-                  {staffList.length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-secondary)' }}>No staff enrolled yet.</td></tr>}
+                  {staffList.length === 0 && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-secondary)' }}>No staff enrolled yet.</td></tr>}
                 </tbody>
               </table>
             </div>

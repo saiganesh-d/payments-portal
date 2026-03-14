@@ -36,6 +36,9 @@ class User(Base):
     # Available balance for staff (client deposits, deducted on payments)
     available_balance = Column(Float, default=0.0, nullable=False, server_default="0")
 
+    # Staff scope: "own_client" = see only creating client's payments, "all" = see all clients' payments
+    staff_scope = Column(String, default="own_client", nullable=False, server_default="own_client")
+
     # Session management - single device login for staff
     session_id = Column(String, nullable=True)
 

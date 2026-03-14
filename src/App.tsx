@@ -73,7 +73,7 @@ function App() {
         <button className="btn-icon hamburger-btn" onClick={() => setSidebarOpen(true)} title="Menu">
           <List size={24} />
         </button>
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Payment Portal</h1>
+        <h1 style={{ fontSize: '1.25rem', fontWeight: 600 }}>7basic</h1>
       </div>
 
       <main style={{ marginTop: '1rem' }}>
