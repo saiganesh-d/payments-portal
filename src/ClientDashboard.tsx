@@ -1347,6 +1347,11 @@ function AdminPanelBlock() {
                                       <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', minWidth: '80px' }}>
                                         {isDeposit ? 'Deposit' : `Payment${entry.status === 'FAILED' ? ' (Failed)' : ''}`}
                                       </span>
+                                      {entry.deposited_by && (
+                                        <span style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, background: '#dbeafe', color: '#1e40af' }}>
+                                          {isDeposit ? 'by' : 'from'} {entry.deposited_by}
+                                        </span>
+                                      )}
                                       {entry.worker_id_code && (
                                         <span className="user-id-highlight" style={{ fontSize: '0.75rem' }}>{entry.worker_id_code}</span>
                                       )}

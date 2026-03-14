@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, case, desc
+from sqlalchemy import func, case, desc, or_
 from typing import List, Optional
 from datetime import datetime
 
@@ -15,6 +15,14 @@ from app.core.security import get_password_hash
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/client", tags=["client"])
+
+def _get_accessible_staff(db: Session, staff_id: str, current_user: User):
+    """Get a staff member if current client can access them (own staff or 'all' scope staff)."""
+    return db.query(User).filter(
+        User.id == staff_id,
+        User.role == UserRole.STAFF,
+        or_(User.client_id == current_user.id, User.staff_scope == "all")
+    ).first()
 
 # --- STAFF MANAGEMENT (ADMIN PANEL) ---
 @router.post("/staff", response_model=UserResponse)
@@ -37,11 +45,18 @@ def create_staff(staff_data: StaffCreate, db: Session = Depends(get_db), current
 
 @router.get("/staff", response_model=List[UserResponse])
 def get_staff(db: Session = Depends(get_db), current_user: User = Depends(require_client)):
-    return db.query(User).filter(User.client_id == current_user.id, User.role == UserRole.STAFF).all()
+    # Show staff belonging to this client + any "all" scope staff from other clients
+    return db.query(User).filter(
+        User.role == UserRole.STAFF,
+        or_(
+            User.client_id == current_user.id,
+            User.staff_scope == "all"
+        )
+    ).all()
 
 @router.put("/staff/{staff_id}/toggle", response_model=UserResponse)
 def toggle_staff_active(staff_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
-    staff = db.query(User).filter(User.id == staff_id, User.client_id == current_user.id, User.role == UserRole.STAFF).first()
+    staff = _get_accessible_staff(db, staff_id, current_user)
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
     staff.is_active = not staff.is_active
@@ -54,7 +69,7 @@ class PasswordResetSchema(BaseModel):
 
 @router.put("/staff/{staff_id}/reset-password")
 def reset_staff_password(staff_id: str, data: PasswordResetSchema, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
-    staff = db.query(User).filter(User.id == staff_id, User.client_id == current_user.id, User.role == UserRole.STAFF).first()
+    staff = _get_accessible_staff(db, staff_id, current_user)
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
     staff.hashed_password = get_password_hash(data.new_password)
@@ -64,7 +79,7 @@ def reset_staff_password(staff_id: str, data: PasswordResetSchema, db: Session =
 # --- BALANCE MANAGEMENT ---
 @router.post("/staff/{staff_id}/add-balance", response_model=UserResponse)
 def add_staff_balance(staff_id: str, data: BalanceAdd, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
-    staff = db.query(User).filter(User.id == staff_id, User.client_id == current_user.id, User.role == UserRole.STAFF).first()
+    staff = _get_accessible_staff(db, staff_id, current_user)
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
 
@@ -86,7 +101,7 @@ def add_staff_balance(staff_id: str, data: BalanceAdd, db: Session = Depends(get
 
 @router.get("/staff/{staff_id}/balance-logs", response_model=List[BalanceLogResponse])
 def get_balance_logs(staff_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
-    staff = db.query(User).filter(User.id == staff_id, User.client_id == current_user.id, User.role == UserRole.STAFF).first()
+    staff = _get_accessible_staff(db, staff_id, current_user)
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
     logs = db.query(BalanceLog).filter(BalanceLog.staff_id == staff_id).order_by(BalanceLog.created_at.desc()).all()
@@ -95,12 +110,14 @@ def get_balance_logs(staff_id: str, db: Session = Depends(get_db), current_user:
 @router.get("/staff/{staff_id}/full-history")
 def get_staff_full_history(staff_id: str, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
     """Returns combined deposit and payment history for a staff member, sorted by time descending."""
-    staff = db.query(User).filter(User.id == staff_id, User.client_id == current_user.id, User.role == UserRole.STAFF).first()
+    staff = _get_accessible_staff(db, staff_id, current_user)
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
 
-    # Get balance deposits
-    logs = db.query(BalanceLog).filter(BalanceLog.staff_id == staff_id).all()
+    # Get balance deposits with client info
+    logs = db.query(BalanceLog).options(
+        joinedload(BalanceLog.client_user)
+    ).filter(BalanceLog.staff_id == staff_id).all()
     entries = []
     for log in logs:
         entries.append({
@@ -112,16 +129,22 @@ def get_staff_full_history(staff_id: str, db: Session = Depends(get_db), current
             "note": log.note,
             "worker_id_code": None,
             "status": None,
+            "deposited_by": log.client_user.username if log.client_user else None,
         })
 
     # Get completed/failed payments processed by this staff
-    payments = db.query(PaymentRequest).options(
-        joinedload(PaymentRequest.worker)
+    # For "all" scope staff, show payments from all clients
+    payment_query = db.query(PaymentRequest).options(
+        joinedload(PaymentRequest.worker),
+        joinedload(PaymentRequest.client)
     ).filter(
         PaymentRequest.locked_by_staff_id == staff_id,
-        PaymentRequest.client_id == current_user.id,
         PaymentRequest.status.in_([PaymentStatus.COMPLETED, PaymentStatus.FAILED])
-    ).all()
+    )
+    if staff.staff_scope != "all":
+        payment_query = payment_query.filter(PaymentRequest.client_id == current_user.id)
+
+    payments = payment_query.all()
     for p in payments:
         entries.append({
             "type": "payment",
@@ -132,6 +155,7 @@ def get_staff_full_history(staff_id: str, db: Session = Depends(get_db), current
             "note": None,
             "worker_id_code": p.worker.worker_id_code if p.worker else None,
             "status": p.status.value if p.status else None,
+            "deposited_by": p.client.username if p.client else None,
         })
 
     # Sort by time descending (use completed_at for payments if available, else created_at)
