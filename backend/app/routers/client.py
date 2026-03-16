@@ -12,6 +12,7 @@ from app.schemas.core import (
 )
 from app.core.deps import require_client
 from app.core.security import get_password_hash
+from app.core.s3 import resolve_qr_urls
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/client", tags=["client"])
@@ -117,7 +118,7 @@ def get_staff_full_history(staff_id: str, db: Session = Depends(get_db), current
     # Get balance deposits with client info
     logs = db.query(BalanceLog).options(
         joinedload(BalanceLog.client_user)
-    ).filter(BalanceLog.staff_id == staff_id).all()
+    ).filter(BalanceLog.staff_id == staff_id).order_by(BalanceLog.created_at.desc()).limit(100).all()
     entries = []
     for log in logs:
         entries.append({
@@ -144,7 +145,7 @@ def get_staff_full_history(staff_id: str, db: Session = Depends(get_db), current
     if staff.staff_scope != "all":
         payment_query = payment_query.filter(PaymentRequest.client_id == current_user.id)
 
-    payments = payment_query.all()
+    payments = payment_query.order_by(PaymentRequest.completed_at.desc()).limit(100).all()
     for p in payments:
         entries.append({
             "type": "payment",
@@ -180,11 +181,13 @@ def create_worker(worker_data: WorkerCreate, db: Session = Depends(get_db), curr
     db.add(new_worker)
     db.commit()
     db.refresh(new_worker)
+    resolve_qr_urls(new_worker)
     return new_worker
 
 @router.get("/workers", response_model=List[WorkerResponse])
 def get_workers(db: Session = Depends(get_db), current_user: User = Depends(require_client)):
     workers = db.query(Worker).filter(Worker.client_id == current_user.id, Worker.is_active == True).all()
+    resolve_qr_urls(workers)
     return workers
 
 class WorkerUpdate(BaseModel):
@@ -211,6 +214,7 @@ def update_worker(worker_id: str, data: WorkerUpdate, db: Session = Depends(get_
         worker.bank_name = data.bank_name
     db.commit()
     db.refresh(worker)
+    resolve_qr_urls(worker)
     return worker
 
 @router.delete("/workers/{worker_id}")
@@ -336,7 +340,9 @@ def get_statements(
     if staff_id:
         query = query.filter(PaymentRequest.locked_by_staff_id == staff_id)
 
-    return query.order_by(PaymentRequest.created_at.desc()).all()
+    payments = query.order_by(PaymentRequest.created_at.desc()).all()
+    resolve_qr_urls(payments)
+    return payments
 
 @router.get("/statistics")
 def get_statistics(
@@ -445,6 +451,8 @@ def get_workers_with_payment_status(db: Session = Depends(get_db), current_user:
         PaymentRequest.status.in_([PaymentStatus.PENDING, PaymentStatus.PROCESSING])
     ).all()
     blocked_worker_ids = {p.worker_id for p in active_payments}
+
+    resolve_qr_urls(workers)
 
     result = []
     for w in workers:

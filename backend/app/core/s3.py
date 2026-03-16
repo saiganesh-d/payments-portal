@@ -30,10 +30,33 @@ async def upload_file_to_s3(file: UploadFile, folder: str = "qr-codes") -> str:
         ContentType=content_type,
     )
 
-    # Return presigned URL (valid for 7 days) since bucket doesn't allow public ACLs
-    presigned_url = s3_client.generate_presigned_url(
+    # Return just the S3 key; presigned URLs are generated on-the-fly when needed
+    return key
+
+
+def get_presigned_url(key: str) -> str:
+    """Generate a presigned URL for an S3 object with 1 hour expiry."""
+    return s3_client.generate_presigned_url(
         "get_object",
         Params={"Bucket": S3_BUCKET, "Key": key},
-        ExpiresIn=604800,  # 7 days
+        ExpiresIn=3600,  # 1 hour
     )
-    return presigned_url
+
+
+def resolve_qr_urls(obj):
+    """Resolve S3 keys to presigned URLs for worker qr_code_url fields."""
+    if obj is None:
+        return obj
+    if isinstance(obj, list):
+        for item in obj:
+            resolve_qr_urls(item)
+        return obj
+    # Handle SQLAlchemy model objects
+    if hasattr(obj, 'qr_code_url') and obj.qr_code_url:
+        url = obj.qr_code_url
+        if not url.startswith('http'):
+            obj.qr_code_url = get_presigned_url(url)
+    # Handle nested worker relationship
+    if hasattr(obj, 'worker') and obj.worker:
+        resolve_qr_urls(obj.worker)
+    return obj

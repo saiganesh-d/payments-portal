@@ -11,6 +11,7 @@ function timeAgo(dateStr: string): string {
   const now = new Date();
   const then = new Date(dateStr);
   const diffMs = now.getTime() - then.getTime();
+  if (diffMs < 0) return 'just now';
   const diffMins = Math.floor(diffMs / 60000);
   if (diffMins < 1) return 'just now';
   if (diffMins < 60) return `${diffMins}m ago`;

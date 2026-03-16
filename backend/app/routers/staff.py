@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select, and_, or_, func, case, desc
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.database import get_db
 from app.models.core import User, PaymentRequest, PaymentStatus, Worker
 from app.schemas.core import PaymentResponse, PaymentComplete
 from app.core.deps import require_staff
+from app.core.s3 import resolve_qr_urls
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
@@ -16,7 +19,7 @@ PROCESSING_TIMEOUT_MINUTES = 5
 
 @router.get("/payments/pending", response_model=List[PaymentResponse])
 def get_pending_payments(db: Session = Depends(get_db), current_user: User = Depends(require_staff)):
-    timeout_threshold = datetime.utcnow() - timedelta(minutes=PROCESSING_TIMEOUT_MINUTES)
+    timeout_threshold = datetime.now(IST) - timedelta(minutes=PROCESSING_TIMEOUT_MINUTES)
 
     # 1. Update any globally timed-out payments back to PENDING
     timed_out_payments = db.query(PaymentRequest).filter(
@@ -51,6 +54,7 @@ def get_pending_payments(db: Session = Depends(get_db), current_user: User = Dep
             PaymentRequest.client_id == current_user.client_id
         ).all()
 
+    resolve_qr_urls(payments)
     return payments
 
 @router.post("/payments/{payment_id}/lock", response_model=PaymentResponse)
@@ -74,6 +78,7 @@ def lock_payment(payment_id: str, db: Session = Depends(get_db), current_user: U
         ).filter(PaymentRequest.id == payment_id).first()
         if existing and existing.status == PaymentStatus.PROCESSING:
             if existing.locked_by_staff_id == current_user.id:
+                resolve_qr_urls(existing)
                 return existing
             raise HTTPException(status_code=409, detail="Payment is currently being processed by someone else.")
         if existing and existing.status == PaymentStatus.COMPLETED:
@@ -84,12 +89,13 @@ def lock_payment(payment_id: str, db: Session = Depends(get_db), current_user: U
     # Apply lock
     payment.status = PaymentStatus.PROCESSING
     payment.locked_by_staff_id = current_user.id
-    payment.locked_at = datetime.utcnow()
+    payment.locked_at = datetime.now(IST)
 
     db.commit()
     payment = db.query(PaymentRequest).options(
         joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)
     ).filter(PaymentRequest.id == payment_id).first()
+    resolve_qr_urls(payment)
     return payment
 
 @router.post("/payments/{payment_id}/complete", response_model=PaymentResponse)
@@ -112,12 +118,13 @@ def complete_payment(payment_id: str, data: PaymentComplete, db: Session = Depen
     payment.status = PaymentStatus.COMPLETED
     payment.transaction_ref_no = data.transaction_ref_no
     payment.receipt_url = data.receipt_url
-    payment.completed_at = datetime.utcnow()
+    payment.completed_at = datetime.now(IST)
 
     db.commit()
     payment = db.query(PaymentRequest).options(
         joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)
     ).filter(PaymentRequest.id == payment_id).first()
+    resolve_qr_urls(payment)
     return payment
 
 @router.post("/payments/{payment_id}/fail", response_model=PaymentResponse)
@@ -133,12 +140,13 @@ def fail_payment(payment_id: str, data: PaymentComplete, db: Session = Depends(g
 
     payment.status = PaymentStatus.FAILED
     payment.staff_comment = data.staff_comment
-    payment.completed_at = datetime.utcnow()
+    payment.completed_at = datetime.now(IST)
 
     db.commit()
     payment = db.query(PaymentRequest).options(
         joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)
     ).filter(PaymentRequest.id == payment_id).first()
+    resolve_qr_urls(payment)
     return payment
 
 @router.post("/payments/{payment_id}/release", response_model=PaymentResponse)
@@ -160,6 +168,7 @@ def release_lock(payment_id: str, db: Session = Depends(get_db), current_user: U
     payment = db.query(PaymentRequest).options(
         joinedload(PaymentRequest.worker), joinedload(PaymentRequest.locked_by_staff)
     ).filter(PaymentRequest.id == payment_id).first()
+    resolve_qr_urls(payment)
     return payment
 
 @router.get("/my-transactions")
@@ -186,16 +195,16 @@ def get_my_transactions(
         query = query.filter(PaymentRequest.completed_at >= start_date)
     if end_date:
         query = query.filter(PaymentRequest.completed_at <= end_date)
+    if search:
+        query = query.join(Worker, PaymentRequest.worker_id == Worker.id).filter(
+            or_(
+                Worker.worker_id_code.ilike(f'%{search}%'),
+                Worker.name.ilike(f'%{search}%')
+            )
+        )
 
     payments = query.order_by(PaymentRequest.completed_at.desc()).all()
-
-    # If search by userid, filter in python (worker relation)
-    if search:
-        search_lower = search.lower()
-        payments = [p for p in payments if p.worker and (
-            (p.worker.worker_id_code or '').lower().find(search_lower) >= 0 or
-            (p.worker.name or '').lower().find(search_lower) >= 0
-        )]
+    resolve_qr_urls(payments)
 
     return [PaymentResponse.model_validate(p) for p in payments]
 

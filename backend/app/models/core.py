@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum, JSON, Boolean, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -17,6 +17,11 @@ class PaymentStatus(str, enum.Enum):
     FAILED = "FAILED"
     DISPUTED = "DISPUTED"
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def now_ist():
+    return datetime.now(IST)
+
 def generate_uuid():
     return str(uuid.uuid4())
 
@@ -28,10 +33,10 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(Enum(UserRole), nullable=False)
 
-    client_id = Column(String, ForeignKey("users.id"), nullable=True)
+    client_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
 
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     # Available balance for staff (client deposits, deducted on payments)
     available_balance = Column(Float, default=0.0, nullable=False, server_default="0")
@@ -67,7 +72,7 @@ class Worker(Base):
     bank_name = Column(String, nullable=True)
 
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     client = relationship("User", back_populates="workers")
     payments = relationship("PaymentRequest", back_populates="worker")
@@ -76,14 +81,14 @@ class PaymentRequest(Base):
     __tablename__ = "payment_requests"
     
     id = Column(String, primary_key=True, default=generate_uuid)
-    worker_id = Column(String, ForeignKey("workers.id"), nullable=False)
-    client_id = Column(String, ForeignKey("users.id"), nullable=False)
+    worker_id = Column(String, ForeignKey("workers.id"), nullable=False, index=True)
+    client_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     
     amount = Column(Float, nullable=False)
     status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, index=True)
     
     # Locking for Staff concurrency
-    locked_by_staff_id = Column(String, ForeignKey("users.id"), nullable=True)
+    locked_by_staff_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     locked_at = Column(DateTime, nullable=True)
     
     # Completion data
@@ -92,7 +97,7 @@ class PaymentRequest(Base):
     receipt_url = Column(String, nullable=True)
     staff_comment = Column(String, nullable=True)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
     
     worker = relationship("Worker", back_populates="payments")
     locked_by_staff = relationship("User", back_populates="locked_payments", foreign_keys=[locked_by_staff_id])
@@ -104,12 +109,12 @@ class BalanceLog(Base):
     __tablename__ = "balance_logs"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    staff_id = Column(String, ForeignKey("users.id"), nullable=False)
-    added_by_client_id = Column(String, ForeignKey("users.id"), nullable=False)
+    staff_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    added_by_client_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     amount = Column(Float, nullable=False)
     balance_after = Column(Float, nullable=False)
     note = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=now_ist)
 
     staff_user = relationship("User", back_populates="balance_logs", foreign_keys=[staff_id])
     client_user = relationship("User", foreign_keys=[added_by_client_id])

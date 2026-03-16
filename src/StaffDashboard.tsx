@@ -10,6 +10,7 @@ function timeAgo(dateStr: string): string {
   const now = new Date();
   const then = new Date(dateStr);
   const diffMs = now.getTime() - then.getTime();
+  if (diffMs < 0) return 'just now';
   const diffMins = Math.floor(diffMs / 60000);
   if (diffMins < 1) return 'just now';
   if (diffMins < 60) return `${diffMins}m ago`;
@@ -90,8 +91,29 @@ export default function StaffDashboard() {
   useEffect(() => {
     fetchPayments();
     fetchBalance();
-    const interval = setInterval(() => { fetchPayments(); fetchBalance(); }, 10000);
-    return () => clearInterval(interval);
+    let interval: ReturnType<typeof setInterval>;
+
+    const startPolling = () => {
+      interval = setInterval(() => { fetchPayments(); fetchBalance(); }, 15000);
+    };
+    const stopPolling = () => clearInterval(interval);
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchPayments();
+        fetchBalance();
+        startPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchPayments, fetchBalance]);
 
   const handleLockPayment = async (paymentId: string) => {
