@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Plus, CurrencyInr, User as UserIcon, Trash,
   Files, Clock, ChartBar, Key, MagnifyingGlass, ArrowCounterClockwise,
   Bank, QrCode, Eye, WarningCircle, Users, TrendUp, Hourglass, XCircle as XCircleIcon,
-  PencilSimple, FloppyDisk, Wallet, CaretDown, CaretUp, UserPlus
+  PencilSimple, FloppyDisk, Wallet, CaretDown, CaretUp, UserPlus, Camera, Image as ImageIcon
 } from '@phosphor-icons/react';
 import api from './api';
 
@@ -59,6 +59,239 @@ function StatCardSkeleton({ count = 3 }: { count?: number }) {
           <div className="skeleton skeleton-text" style={{ width: '80px', height: '2rem' }} />
         </div>
       ))}
+    </div>
+  );
+}
+
+// ==========================================
+// QR IMAGE COMPRESSION (client-side, before upload)
+// ==========================================
+const QR_MAX_DIMENSION = 800; // QR codes don't need more than 800px
+const QR_JPEG_QUALITY = 0.7;  // 70% quality is plenty for QR readability
+
+function compressQrImage(file: File): Promise<File> {
+  return new Promise((resolve) => {
+    // If already small enough (<100KB), skip compression
+    if (file.size <= 100 * 1024) {
+      resolve(file);
+      return;
+    }
+
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      let { width, height } = img;
+
+      // Scale down if either dimension exceeds max
+      if (width > QR_MAX_DIMENSION || height > QR_MAX_DIMENSION) {
+        const ratio = Math.min(QR_MAX_DIMENSION / width, QR_MAX_DIMENSION / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(file); return; }
+
+      // Use pixelated rendering to keep QR edges sharp
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob || blob.size >= file.size) {
+            // Compression didn't help, use original
+            resolve(file);
+            return;
+          }
+          // Preserve original name but with .jpg extension
+          const baseName = file.name.replace(/\.[^.]+$/, '');
+          const compressed = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+          resolve(compressed);
+        },
+        'image/jpeg',
+        QR_JPEG_QUALITY
+      );
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      // Can't decode image for compression, use original
+      resolve(file);
+    };
+
+    img.src = url;
+  });
+}
+
+// ==========================================
+// QR FILE PICKER (Gallery + Camera Capture)
+// ==========================================
+function QrFilePicker({
+  file,
+  onFileChange,
+  inputId,
+  compact = false,
+}: {
+  file: File | null;
+  onFileChange: (file: File | null) => void;
+  inputId: string;
+  compact?: boolean;
+}) {
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
+  const [savedInfo, setSavedInfo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file) { setPreview(null); setSavedInfo(null); return; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+    // Reset input so re-selecting the same file triggers onChange
+    e.target.value = '';
+
+    if (!selected.type.startsWith('image/')) {
+      alert('Please select an image file (PNG, JPG, etc.)');
+      return;
+    }
+    if (selected.size > 10 * 1024 * 1024) {
+      alert('File is too large. Maximum size is 10 MB.');
+      return;
+    }
+
+    setCompressing(true);
+    setSavedInfo(null);
+    try {
+      const compressed = await compressQrImage(selected);
+      if (compressed !== selected && compressed.size < selected.size) {
+        const pct = Math.round((1 - compressed.size / selected.size) * 100);
+        const sizeKB = Math.round(compressed.size / 1024);
+        setSavedInfo(`Compressed: ${sizeKB}KB (${pct}% smaller)`);
+      }
+      onFileChange(compressed);
+    } catch {
+      // Compression failed, use original
+      onFileChange(selected);
+    } finally {
+      setCompressing(false);
+    }
+  };
+
+  if (compressing) {
+    return (
+      <div style={{
+        border: '2px dashed var(--border-color)',
+        borderRadius: 'var(--radius-md)',
+        padding: compact ? '1rem' : '1.5rem',
+        textAlign: 'center',
+        background: 'var(--bg-primary)',
+      }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Compressing image...</div>
+      </div>
+    );
+  }
+
+  if (file && preview) {
+    return (
+      <div style={{
+        border: '2px solid #16a34a',
+        borderRadius: 'var(--radius-md)',
+        padding: compact ? '0.75rem' : '1rem',
+        background: '#f0fdf4',
+        textAlign: 'center',
+      }}>
+        <img
+          src={preview}
+          alt="QR Preview"
+          style={{ maxWidth: compact ? '120px' : '160px', maxHeight: compact ? '120px' : '160px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem' }}
+        />
+        <div style={{ color: '#16a34a', fontWeight: 500, fontSize: '0.85rem', marginBottom: '0.25rem' }}>
+          {file.name}
+        </div>
+        {savedInfo && (
+          <div style={{ color: '#059669', fontSize: '0.75rem', marginBottom: '0.5rem' }}>{savedInfo}</div>
+        )}
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+          <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }} onClick={() => galleryRef.current?.click()}>
+            <ImageIcon size={14} /> Change
+          </button>
+          <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }} onClick={() => cameraRef.current?.click()}>
+            <Camera size={14} /> Retake
+          </button>
+          <button type="button" className="btn-secondary" style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', color: '#dc2626' }} onClick={() => onFileChange(null)}>
+            <Trash size={14} /> Remove
+          </button>
+        </div>
+        <input ref={galleryRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display: 'none' }} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{
+        display: 'flex', gap: '0.75rem', justifyContent: 'center',
+      }}>
+        <button
+          type="button"
+          onClick={() => cameraRef.current?.click()}
+          style={{
+            flex: 1,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+            border: '2px dashed var(--accent-color)',
+            borderRadius: 'var(--radius-md)',
+            padding: compact ? '1rem' : '1.5rem',
+            background: 'var(--bg-primary)',
+            cursor: 'pointer',
+            color: 'var(--accent-color)',
+            fontWeight: 500,
+            fontSize: '0.85rem',
+            fontFamily: 'inherit',
+            transition: 'all 0.2s',
+          }}
+        >
+          <Camera size={28} />
+          <span>Take Photo</span>
+          <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-secondary)' }}>Open camera</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => galleryRef.current?.click()}
+          style={{
+            flex: 1,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+            border: '2px dashed var(--border-color)',
+            borderRadius: 'var(--radius-md)',
+            padding: compact ? '1rem' : '1.5rem',
+            background: 'var(--bg-primary)',
+            cursor: 'pointer',
+            color: 'var(--text-secondary)',
+            fontWeight: 500,
+            fontSize: '0.85rem',
+            fontFamily: 'inherit',
+            transition: 'all 0.2s',
+          }}
+        >
+          <ImageIcon size={28} />
+          <span>From Gallery</span>
+          <span style={{ fontSize: '0.75rem', fontWeight: 400 }}>Upload image</span>
+        </button>
+      </div>
+      <input ref={galleryRef} id={inputId} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display: 'none' }} />
     </div>
   );
 }
@@ -368,35 +601,13 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
                 )}
                 {editMode && (
                   <div>
-                    {viewWorker.qr_code_url && (
+                    {viewWorker.qr_code_url && !editQrFile && (
                       <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
                         <img src={viewWorker.qr_code_url} alt="Current QR" style={{ maxWidth: '120px', maxHeight: '120px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', opacity: 0.6 }} />
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>Current QR</div>
                       </div>
                     )}
-                    <div style={{
-                      border: `2px dashed ${editQrFile ? '#16a34a' : 'var(--border-color)'}`,
-                      borderRadius: 'var(--radius-md)',
-                      padding: '1rem',
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      background: editQrFile ? '#f0fdf4' : 'var(--bg-primary)',
-                    }}
-                    onClick={() => document.getElementById('edit-qr-file-input')?.click()}
-                    >
-                      <input
-                        id="edit-qr-file-input"
-                        type="file"
-                        accept="image/*"
-                        onChange={e => setEditQrFile(e.target.files?.[0] || null)}
-                        style={{ display: 'none' }}
-                      />
-                      {editQrFile ? (
-                        <div style={{ color: '#16a34a', fontSize: '0.85rem' }}>New file: {editQrFile.name}</div>
-                      ) : (
-                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Click to upload new QR code</div>
-                      )}
-                    </div>
+                    <QrFilePicker file={editQrFile} onFileChange={setEditQrFile} inputId="edit-qr-file-input" compact />
                   </div>
                 )}
               </div>
@@ -506,38 +717,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <QrCode size={16} /> QR Code Image *
                     </label>
-                    <div style={{
-                      border: `2px dashed ${qrFile ? '#16a34a' : 'var(--border-color)'}`,
-                      borderRadius: 'var(--radius-md)',
-                      padding: '1.5rem',
-                      textAlign: 'center',
-                      cursor: 'pointer',
-                      background: qrFile ? '#f0fdf4' : 'var(--bg-primary)',
-                      transition: 'all 0.2s'
-                    }}
-                    onClick={() => document.getElementById('qr-file-input')?.click()}
-                    >
-                      <input
-                        id="qr-file-input"
-                        type="file"
-                        accept="image/*"
-                        onChange={e => setQrFile(e.target.files?.[0] || null)}
-                        style={{ display: 'none' }}
-                      />
-                      {qrFile ? (
-                        <div style={{ color: '#16a34a', fontWeight: 500 }}>
-                          <QrCode size={24} style={{ marginBottom: '0.25rem' }} />
-                          <div>{qrFile.name}</div>
-                          <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>Click to change</div>
-                        </div>
-                      ) : (
-                        <div style={{ color: 'var(--text-secondary)' }}>
-                          <QrCode size={24} style={{ marginBottom: '0.25rem' }} />
-                          <div>Click to upload QR code image</div>
-                          <div style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}>PNG, JPG accepted</div>
-                        </div>
-                      )}
-                    </div>
+                    <QrFilePicker file={qrFile} onFileChange={setQrFile} inputId="qr-file-input" />
                   </div>
                 </div>
               </div>
