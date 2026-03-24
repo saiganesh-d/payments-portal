@@ -408,7 +408,7 @@ export default function StaffDashboard() {
                 style={{ minWidth: 'unset' }}
               />
             </div>
-            <button className="btn-secondary" onClick={fetchPayments} style={{ padding: '0.6rem 0.75rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>Refresh</button>
+            <button className="btn-secondary" onClick={() => fetchPayments()} style={{ padding: '0.6rem 0.75rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>Refresh</button>
           </div>
 
           {error && <div style={{ color: '#dc2626', marginBottom: '0.75rem', padding: '0.6rem 0.75rem', background: '#fee2e2', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>{error}</div>}
