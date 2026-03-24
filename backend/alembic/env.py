@@ -20,7 +20,7 @@ import sys
 sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.database import Base
-from app.models.core import User, Worker, PaymentRequest
+from app.models.core import User, Worker, PaymentRequest, BalanceLog
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

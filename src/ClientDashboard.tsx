@@ -227,7 +227,8 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
     if (!confirm('Are you sure you want to delete this user?')) return;
     try {
       await api.delete(`/client/workers/${id}`);
-      fetchWorkers();
+      // Optimistic: remove from local state instantly
+      setWorkers(prev => prev.filter(w => w.id !== id));
     } catch { alert('Error deleting user'); }
   };
 
@@ -608,7 +609,10 @@ function WithdrawListBlock({ onViewStatement }: { onViewStatement: (id: string) 
     try {
       await api.post('/client/payments', { worker_id: workerId, amount: amt });
       setAmounts(prev => ({ ...prev, [workerId]: '' }));
-      fetchWorkers(); // refresh to update has_active_payment status
+      // Optimistic: instantly mark this worker as having an active payment
+      setWorkers(prev => prev.map(w =>
+        w.id === workerId ? { ...w, has_active_payment: true } : w
+      ));
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Error adding payment');
     } finally {
@@ -713,7 +717,8 @@ function PendingWithdrawalsBlock() {
     if (!confirm('Delete this pending payment? This cannot be undone.')) return;
     try {
       await api.delete(`/client/payments/${paymentId}`);
-      fetchPayments();
+      // Optimistic: remove from local state instantly
+      setPayments(prev => prev.filter(p => p.id !== paymentId));
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Error deleting payment');
     }
@@ -890,7 +895,10 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
     if (!confirm('Retry this failed payment? It will return to the PENDING queue.')) return;
     try {
       await api.post(`/client/payments/${paymentId}/retry`);
-      fetchStatements();
+      // Optimistic: update status locally, then background refresh stats
+      setStatements(prev => prev.map(tx =>
+        tx.id === paymentId ? { ...tx, status: 'PENDING', locked_by_staff: null, completed_at: null, transaction_ref_no: null, staff_comment: null } : tx
+      ));
       fetchGlobalStats();
     } catch { alert('Error retrying payment'); }
   };
@@ -1163,7 +1171,8 @@ function AdminPanelBlock() {
     if (!confirm(`Are you sure you want to ${currentStatus ? 'deactivate' : 'activate'} this staff member?`)) return;
     try {
       await api.put(`/client/staff/${id}/toggle`);
-      fetchStaff();
+      // Optimistic: toggle locally
+      setStaffList(prev => prev.map(s => s.id === id ? { ...s, is_active: !s.is_active } : s));
     } catch { alert('Error toggling staff status'); }
   };
 
@@ -1188,7 +1197,10 @@ function AdminPanelBlock() {
       });
       setBalanceAmounts(prev => ({ ...prev, [staffId]: '' }));
       setBalanceNotes(prev => ({ ...prev, [staffId]: '' }));
-      fetchStaff();
+      // Optimistic: update balance locally
+      setStaffList(prev => prev.map(s =>
+        s.id === staffId ? { ...s, available_balance: (s.available_balance || 0) + amt } : s
+      ));
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Error adding balance');
     } finally {

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum, JSON, Boolean, Text
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum, JSON, Boolean, Text, Index
 from sqlalchemy.orm import relationship
 from app.database import Base
 import enum
@@ -99,6 +99,14 @@ class PaymentRequest(Base):
     
     created_at = Column(DateTime, default=now_ist)
     
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        Index('ix_payment_client_status', 'client_id', 'status'),
+        Index('ix_payment_worker_status', 'worker_id', 'client_id', 'status'),
+        Index('ix_payment_staff_status', 'locked_by_staff_id', 'status'),
+        Index('ix_payment_completed_at', 'completed_at'),
+    )
+
     worker = relationship("Worker", back_populates="payments")
     locked_by_staff = relationship("User", back_populates="locked_payments", foreign_keys=[locked_by_staff_id])
     client = relationship("User", foreign_keys=[client_id])
@@ -115,6 +123,10 @@ class BalanceLog(Base):
     balance_after = Column(Float, nullable=False)
     note = Column(Text, nullable=True)
     created_at = Column(DateTime, default=now_ist)
+
+    __table_args__ = (
+        Index('ix_balancelog_client', 'added_by_client_id'),
+    )
 
     staff_user = relationship("User", back_populates="balance_logs", foreign_keys=[staff_id])
     client_user = relationship("User", foreign_keys=[added_by_client_id])

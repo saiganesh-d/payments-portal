@@ -16,22 +16,29 @@ router = APIRouter(prefix="/staff", tags=["staff"])
 
 # Constants
 PROCESSING_TIMEOUT_MINUTES = 5
+_CLEANUP_INTERVAL_SECONDS = 30
+_last_cleanup_time: float = 0
 
 @router.get("/payments/pending", response_model=List[PaymentResponse])
 def get_pending_payments(db: Session = Depends(get_db), current_user: User = Depends(require_staff)):
-    timeout_threshold = datetime.now(IST) - timedelta(minutes=PROCESSING_TIMEOUT_MINUTES)
+    import time
+    global _last_cleanup_time
+    now_ts = time.time()
 
-    # 1. Update any globally timed-out payments back to PENDING
-    timed_out_payments = db.query(PaymentRequest).filter(
-        PaymentRequest.status == PaymentStatus.PROCESSING,
-        PaymentRequest.locked_at < timeout_threshold
-    ).update({
-        PaymentRequest.status: PaymentStatus.PENDING,
-        PaymentRequest.locked_by_staff_id: None,
-        PaymentRequest.locked_at: None
-    })
-    if timed_out_payments > 0:
-        db.commit()
+    # Throttle: only run timeout cleanup every 30 seconds, not on every request
+    if now_ts - _last_cleanup_time > _CLEANUP_INTERVAL_SECONDS:
+        _last_cleanup_time = now_ts
+        timeout_threshold = datetime.now(IST) - timedelta(minutes=PROCESSING_TIMEOUT_MINUTES)
+        timed_out_payments = db.query(PaymentRequest).filter(
+            PaymentRequest.status == PaymentStatus.PROCESSING,
+            PaymentRequest.locked_at < timeout_threshold
+        ).update({
+            PaymentRequest.status: PaymentStatus.PENDING,
+            PaymentRequest.locked_by_staff_id: None,
+            PaymentRequest.locked_at: None
+        })
+        if timed_out_payments > 0:
+            db.commit()
 
     # 2. Fetch all fully PENDING, PLUS anything currently PROCESSING locked by ME.
     #    If staff_scope is "own_client", only show payments from the staff's assigned client.
@@ -178,6 +185,8 @@ def get_my_transactions(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     search: Optional[str] = None,
+    limit: int = Query(default=200, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_staff)
 ):
@@ -203,7 +212,7 @@ def get_my_transactions(
             )
         )
 
-    payments = query.order_by(PaymentRequest.completed_at.desc()).all()
+    payments = query.order_by(PaymentRequest.completed_at.desc()).offset(offset).limit(limit).all()
     resolve_qr_urls(payments)
 
     return [PaymentResponse.model_validate(p) for p in payments]

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   LockKey, CheckCircle, XCircle, ArrowLeft,
   MagnifyingGlass, ChartBar, CurrencyInr, TrendUp,
@@ -68,9 +68,17 @@ export default function StaffDashboard() {
   const [sortField, setSortField] = useState<'amount' | 'created_at' | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  const fetchPayments = useCallback(async () => {
+  // Track last data fingerprint to avoid unnecessary re-renders during polling
+  const lastPaymentsRef = useRef<string>('');
+  const lastBalanceRef = useRef<number | null>(null);
+
+  const fetchPayments = useCallback(async (isPolling = false) => {
     try {
       const res = await api.get('/staff/payments/pending');
+      // Only update state if data actually changed (prevents table flash)
+      const fingerprint = JSON.stringify(res.data.map((p: any) => `${p.id}:${p.status}:${p.amount}`));
+      if (isPolling && fingerprint === lastPaymentsRef.current) return;
+      lastPaymentsRef.current = fingerprint;
       setPayments(res.data);
       const locked = res.data.find((p: any) => p.status === 'PROCESSING');
       if (locked) setProcessingPayment(locked);
@@ -81,10 +89,13 @@ export default function StaffDashboard() {
     }
   }, []);
 
-  const fetchBalance = useCallback(async () => {
+  const fetchBalance = useCallback(async (isPolling = false) => {
     try {
       const res = await api.get('/staff/my-balance');
-      setBalance(res.data.available_balance);
+      const newBal = res.data.available_balance;
+      if (isPolling && newBal === lastBalanceRef.current) return;
+      lastBalanceRef.current = newBal;
+      setBalance(newBal);
     } catch {}
   }, []);
 
@@ -94,7 +105,7 @@ export default function StaffDashboard() {
     let interval: ReturnType<typeof setInterval>;
 
     const startPolling = () => {
-      interval = setInterval(() => { fetchPayments(); fetchBalance(); }, 15000);
+      interval = setInterval(() => { fetchPayments(true); fetchBalance(true); }, 15000);
     };
     const stopPolling = () => clearInterval(interval);
 
@@ -123,7 +134,8 @@ export default function StaffDashboard() {
       const res = await api.post(`/staff/payments/${paymentId}/lock`);
       setProcessingPayment(res.data);
       setUtr(''); setComment('');
-      fetchPayments();
+      // Optimistic: remove locked payment from pending list instantly
+      setPayments(prev => prev.filter(p => p.id !== paymentId));
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(typeof detail === 'string' ? detail : 'Someone else already grabbed this payment.');
@@ -138,8 +150,10 @@ export default function StaffDashboard() {
     setLoading(true);
     try {
       await api.post(`/staff/payments/${processingPayment.id}/release`);
+      // Optimistic: add released payment back to pending list, clear processing
+      const released = { ...processingPayment, status: 'PENDING', locked_by_staff_id: null, locked_at: null };
+      setPayments(prev => [released, ...prev]);
       setProcessingPayment(null);
-      fetchPayments();
     } catch {
       alert('Failed to release lock');
     } finally {
@@ -153,8 +167,9 @@ export default function StaffDashboard() {
     setLoading(true);
     try {
       await api.post(`/staff/payments/${processingPayment.id}/fail`, { staff_comment: comment });
+      // Optimistic: clear processing view, remove from list (it's now FAILED)
+      setPayments(prev => prev.filter(p => p.id !== processingPayment.id));
       setProcessingPayment(null);
-      fetchPayments();
       fetchBalance();
     } catch {
       alert('Error failing payment');
@@ -173,9 +188,11 @@ export default function StaffDashboard() {
         transaction_ref_no: utr,
         staff_comment: comment || null
       });
+      // Optimistic: clear processing view, remove from list (it's now COMPLETED)
+      setPayments(prev => prev.filter(p => p.id !== processingPayment.id));
       setProcessingPayment(null);
-      fetchPayments();
-      fetchBalance();
+      // Optimistic: deduct balance locally
+      setBalance(prev => prev - processingPayment.amount);
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(typeof detail === 'string' ? detail : 'Failed to complete payment.');

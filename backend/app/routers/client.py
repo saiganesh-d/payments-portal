@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, case, desc, or_
+from sqlalchemy import func, case, desc, or_, and_
 from typing import List, Optional
 from datetime import datetime
 
@@ -321,6 +321,8 @@ def get_statements(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     staff_id: Optional[str] = None,
+    limit: int = Query(default=200, le=500),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_client)
 ):
@@ -340,7 +342,7 @@ def get_statements(
     if staff_id:
         query = query.filter(PaymentRequest.locked_by_staff_id == staff_id)
 
-    payments = query.order_by(PaymentRequest.created_at.desc()).all()
+    payments = query.order_by(PaymentRequest.created_at.desc()).offset(offset).limit(limit).all()
     resolve_qr_urls(payments)
     return payments
 
@@ -354,6 +356,7 @@ def get_statistics(
 ):
     """Returns comprehensive statistics with optional staff and date range filters."""
 
+    # Query 1: Payment stats grouped by status
     query = db.query(
         PaymentRequest.status,
         func.count(PaymentRequest.id).label('cnt'),
@@ -378,34 +381,26 @@ def get_statistics(
     processing = stats_map.get(PaymentStatus.PROCESSING, {"count": 0, "amount": 0.0})
     failed = stats_map.get(PaymentStatus.FAILED, {"count": 0, "amount": 0.0})
 
-    # Total deposited to all staff
+    # Query 2: Combined staff balance, staff counts, total deposited, and worker count in one query
+    combined = db.query(
+        func.coalesce(func.sum(User.available_balance), 0).label('total_staff_balance'),
+        func.count(User.id).label('total_staff'),
+        func.count(case((User.is_active == True, 1))).label('active_staff'),
+    ).filter(
+        User.client_id == current_user.id, User.role == UserRole.STAFF
+    ).first()
+
+    total_users = db.query(func.count(Worker.id)).filter(
+        Worker.client_id == current_user.id, Worker.is_active == True
+    ).scalar() or 0
+
     total_deposited = db.query(
         func.coalesce(func.sum(BalanceLog.amount), 0)
     ).filter(
         BalanceLog.added_by_client_id == current_user.id
     ).scalar() or 0
 
-    # Current total balance across all staff
-    total_staff_balance = db.query(
-        func.coalesce(func.sum(User.available_balance), 0)
-    ).filter(
-        User.client_id == current_user.id,
-        User.role == UserRole.STAFF
-    ).scalar() or 0
-
-    # Single query for worker + staff counts
-    total_users = db.query(func.count(Worker.id)).filter(
-        Worker.client_id == current_user.id, Worker.is_active == True
-    ).scalar() or 0
-
-    staff_stats = db.query(
-        func.count(User.id).label('total'),
-        func.count(case((User.is_active == True, 1))).label('active')
-    ).filter(
-        User.client_id == current_user.id, User.role == UserRole.STAFF
-    ).first()
-
-    # Top pending workers
+    # Query 3: Top pending workers (only when no date/staff filters narrow it down to non-pending)
     top_pending_workers = db.query(
         Worker.id, Worker.name, Worker.worker_id_code,
         func.count(PaymentRequest.id).label('pending_count'),
@@ -432,32 +427,41 @@ def get_statistics(
         "processing_amount": processing["amount"],
         "failed_count": failed["count"],
         "failed_amount": failed["amount"],
-        "total_staff": staff_stats.total if staff_stats else 0,
-        "active_staff": staff_stats.active if staff_stats else 0,
+        "total_staff": combined.total_staff if combined else 0,
+        "active_staff": combined.active_staff if combined else 0,
         "top_pending_workers": top_pending,
         "total_deposited": float(total_deposited),
-        "total_staff_balance": float(total_staff_balance),
+        "total_staff_balance": float(combined.total_staff_balance) if combined else 0,
     }
 
 # Workers with pending payment status (for withdrawal tab)
 @router.get("/workers-with-status")
 def get_workers_with_payment_status(db: Session = Depends(get_db), current_user: User = Depends(require_client)):
     """Get workers with their active payment status to prevent duplicates on frontend."""
-    workers = db.query(Worker).filter(Worker.client_id == current_user.id, Worker.is_active == True).all()
+    # Single query with LEFT JOIN — no N+1, no separate payment query
+    rows = db.query(
+        Worker,
+        func.count(PaymentRequest.id).label('active_count')
+    ).outerjoin(
+        PaymentRequest,
+        and_(
+            PaymentRequest.worker_id == Worker.id,
+            PaymentRequest.client_id == current_user.id,
+            PaymentRequest.status.in_([PaymentStatus.PENDING, PaymentStatus.PROCESSING])
+        )
+    ).filter(
+        Worker.client_id == current_user.id,
+        Worker.is_active == True
+    ).group_by(Worker.id).all()
 
-    # Get all workers that have pending/processing payments
-    active_payments = db.query(PaymentRequest.worker_id).filter(
-        PaymentRequest.client_id == current_user.id,
-        PaymentRequest.status.in_([PaymentStatus.PENDING, PaymentStatus.PROCESSING])
-    ).all()
-    blocked_worker_ids = {p.worker_id for p in active_payments}
-
+    workers = [row[0] for row in rows]
     resolve_qr_urls(workers)
 
     result = []
-    for w in workers:
+    for row in rows:
+        w, active_count = row
         worker_data = WorkerResponse.model_validate(w).model_dump()
-        worker_data["has_active_payment"] = w.id in blocked_worker_ids
+        worker_data["has_active_payment"] = active_count > 0
         result.append(worker_data)
 
     return result
