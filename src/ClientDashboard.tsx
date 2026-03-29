@@ -6,6 +6,7 @@ import {
   PencilSimple, FloppyDisk, Wallet, CaretDown, CaretUp, UserPlus, Camera, Image as ImageIcon
 } from '@phosphor-icons/react';
 import api from './api';
+import { toast } from './toast';
 
 function timeAgo(dateStr: string): string {
   const now = new Date();
@@ -163,11 +164,11 @@ function QrFilePicker({
     e.target.value = '';
 
     if (!selected.type.startsWith('image/')) {
-      alert('Please select an image file (PNG, JPG, etc.)');
+      toast.error('Please select an image file (PNG, JPG, etc.)');
       return;
     }
     if (selected.size > 10 * 1024 * 1024) {
-      alert('File is too large. Maximum size is 10 MB.');
+      toast.error('File is too large. Maximum size is 10 MB.');
       return;
     }
 
@@ -416,8 +417,9 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
       setEditMode(false);
       setEditQrFile(null);
       fetchWorkers();
+      toast.success('User updated successfully');
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Error updating user');
+      toast.error(err.response?.data?.detail || 'Error updating user');
     } finally {
       setEditSaving(false);
     }
@@ -426,7 +428,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!qrFile) {
-      alert('QR Code image is mandatory. Please upload a QR code.');
+      toast.error('QR Code image is mandatory. Please upload a QR code.');
       return;
     }
     setLoading(true);
@@ -451,8 +453,9 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
       setShowAdd(false);
       setName(''); setUserIdCode(''); setQrFile(null); setAccNum(''); setIfsc(''); setAccName(''); setBankName('');
       fetchWorkers();
+      toast.success('User added successfully');
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Error adding user');
+      toast.error(err.response?.data?.detail || 'Error adding user');
     } finally {
       setLoading(false);
     }
@@ -464,7 +467,8 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
       await api.delete(`/client/workers/${id}`);
       // Optimistic: remove from local state instantly
       setWorkers(prev => prev.filter(w => w.id !== id));
-    } catch { alert('Error deleting user'); }
+      toast.success('User deleted');
+    } catch { toast.error('Error deleting user'); }
   };
 
   const filtered = workers.filter(w =>
@@ -787,7 +791,7 @@ function WithdrawListBlock({ onViewStatement }: { onViewStatement: (id: string) 
 
   const handleAddPayment = async (workerId: string) => {
     const amt = parseFloat(amounts[workerId]);
-    if (!amt || amt <= 0) return alert('Enter a valid amount');
+    if (!amt || amt <= 0) return toast.error('Enter a valid amount');
     setSubmitting(workerId);
     try {
       await api.post('/client/payments', { worker_id: workerId, amount: amt });
@@ -796,8 +800,9 @@ function WithdrawListBlock({ onViewStatement }: { onViewStatement: (id: string) 
       setWorkers(prev => prev.map(w =>
         w.id === workerId ? { ...w, has_active_payment: true } : w
       ));
+      toast.success('Payment added to queue');
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Error adding payment');
+      toast.error(err.response?.data?.detail || 'Error adding payment');
     } finally {
       setSubmitting(null);
     }
@@ -902,8 +907,9 @@ function PendingWithdrawalsBlock() {
       await api.delete(`/client/payments/${paymentId}`);
       // Optimistic: remove from local state instantly
       setPayments(prev => prev.filter(p => p.id !== paymentId));
+      toast.success('Payment deleted');
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Error deleting payment');
+      toast.error(err.response?.data?.detail || 'Error deleting payment');
     }
   };
 
@@ -1083,7 +1089,8 @@ function StatisticsBlock({ initialUserId, onClearUserFilter }: { initialUserId: 
         tx.id === paymentId ? { ...tx, status: 'PENDING', locked_by_staff: null, completed_at: null, transaction_ref_no: null, staff_comment: null } : tx
       ));
       fetchGlobalStats();
-    } catch { alert('Error retrying payment'); }
+      toast.success('Payment moved back to pending queue');
+    } catch { toast.error('Error retrying payment'); }
   };
 
   const filteredTotal = statements.reduce((sum: number, tx: any) => sum + tx.amount, 0);
@@ -1342,11 +1349,11 @@ function AdminPanelBlock() {
     setLoading(true);
     try {
       await api.post('/client/staff', { username, password, scope });
-      alert('Staff account created successfully!');
       setUsername(''); setPassword(''); setScope('own_client');
       fetchStaff();
+      toast.success('Staff account created');
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Error creating staff');
+      toast.error(err.response?.data?.detail || 'Error creating staff');
     } finally {
       setLoading(false);
     }
@@ -1358,7 +1365,8 @@ function AdminPanelBlock() {
       await api.put(`/client/staff/${id}/toggle`);
       // Optimistic: toggle locally
       setStaffList(prev => prev.map(s => s.id === id ? { ...s, is_active: !s.is_active } : s));
-    } catch { alert('Error toggling staff status'); }
+      toast.success(`Staff ${currentStatus ? 'deactivated' : 'activated'}`);
+    } catch { toast.error('Error toggling staff status'); }
   };
 
   const handleResetPassword = async (id: string) => {
@@ -1366,13 +1374,13 @@ function AdminPanelBlock() {
     if (!newPw) return;
     try {
       await api.put(`/client/staff/${id}/reset-password`, { new_password: newPw });
-      alert("Password reset successfully!");
-    } catch { alert('Error resetting password'); }
+      toast.success('Password reset successfully');
+    } catch { toast.error('Error resetting password'); }
   };
 
   const handleAddBalance = async (staffId: string) => {
     const amt = parseFloat(balanceAmounts[staffId]);
-    if (!amt || amt <= 0) return alert('Enter a valid amount');
+    if (!amt || amt <= 0) return toast.error('Enter a valid amount');
     setAddingBalance(staffId);
     try {
       await api.post(`/client/staff/${staffId}/add-balance`, {
@@ -1386,8 +1394,9 @@ function AdminPanelBlock() {
       setStaffList(prev => prev.map(s =>
         s.id === staffId ? { ...s, available_balance: (s.available_balance || 0) + amt } : s
       ));
+      toast.success(`₹${amt.toLocaleString()} added to balance`);
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Error adding balance');
+      toast.error(err.response?.data?.detail || 'Error adding balance');
     } finally {
       setAddingBalance(null);
     }
@@ -1402,7 +1411,7 @@ function AdminPanelBlock() {
       const res = await api.get(`/client/staff/${staffId}/full-history`);
       setStaffHistory(prev => ({ ...prev, [staffId]: res.data }));
       setShowHistory(staffId);
-    } catch { alert('Error fetching staff history'); }
+    } catch { toast.error('Error fetching staff history'); }
   };
 
   return (

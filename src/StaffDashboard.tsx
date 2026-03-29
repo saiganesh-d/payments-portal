@@ -6,6 +6,7 @@ import {
   DownloadSimple, ShareNetwork, Camera, Image as ImageIcon, Trash
 } from '@phosphor-icons/react';
 import api from './api';
+import { toast } from './toast';
 
 const RECEIPT_MAX_DIMENSION = 1200;
 const RECEIPT_JPEG_QUALITY = 0.75;
@@ -46,9 +47,10 @@ function ReceiptPicker({ file, onFileChange }: { file: File | null; onFileChange
   const cameraRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [compressing, setCompressing] = useState(false);
+  const [savedInfo, setSavedInfo] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!file) { setPreview(null); return; }
+    if (!file) { setPreview(null); setSavedInfo(null); return; }
     const url = URL.createObjectURL(file);
     setPreview(url);
     return () => URL.revokeObjectURL(url);
@@ -58,11 +60,16 @@ function ReceiptPicker({ file, onFileChange }: { file: File | null; onFileChange
     const selected = e.target.files?.[0];
     if (!selected) return;
     e.target.value = '';
-    if (!selected.type.startsWith('image/')) { alert('Please select an image file.'); return; }
-    if (selected.size > 10 * 1024 * 1024) { alert('File too large. Maximum 10 MB.'); return; }
+    if (!selected.type.startsWith('image/')) { toast.error('Please select an image file.'); return; }
+    if (selected.size > 10 * 1024 * 1024) { toast.error('File too large. Maximum 10 MB.'); return; }
     setCompressing(true);
+    setSavedInfo(null);
     try {
       const compressed = await compressReceiptImage(selected);
+      if (compressed !== selected && compressed.size < selected.size) {
+        const pct = Math.round((1 - compressed.size / selected.size) * 100);
+        setSavedInfo(`Compressed: ${Math.round(compressed.size / 1024)}KB (${pct}% smaller)`);
+      }
       onFileChange(compressed);
     } catch { onFileChange(selected); }
     finally { setCompressing(false); }
@@ -76,7 +83,8 @@ function ReceiptPicker({ file, onFileChange }: { file: File | null; onFileChange
     return (
       <div style={{ border: '2px solid #16a34a', borderRadius: 'var(--radius-md)', padding: '0.75rem', background: '#f0fdf4', textAlign: 'center' }}>
         <img src={preview} alt="Receipt" style={{ maxWidth: '100%', maxHeight: '140px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem' }} />
-        <div style={{ color: '#16a34a', fontWeight: 500, fontSize: '0.8rem', marginBottom: '0.4rem' }}>{file.name} ({Math.round(file.size / 1024)}KB)</div>
+        <div style={{ color: '#16a34a', fontWeight: 500, fontSize: '0.8rem', marginBottom: '0.25rem' }}>{file.name} ({Math.round(file.size / 1024)}KB)</div>
+        {savedInfo && <div style={{ color: '#059669', fontSize: '0.75rem', marginBottom: '0.4rem' }}>{savedInfo}</div>}
         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
           <button type="button" className="btn-secondary" style={{ padding: '0.3rem 0.55rem', fontSize: '0.78rem' }} onClick={() => galleryRef.current?.click()}><ImageIcon size={13} /> Change</button>
           <button type="button" className="btn-secondary" style={{ padding: '0.3rem 0.55rem', fontSize: '0.78rem' }} onClick={() => cameraRef.current?.click()}><Camera size={13} /> Retake</button>
@@ -175,7 +183,7 @@ function QrActionButtons({ url, fileName }: { url: string; fileName: string }) {
       setDownloaded(true);
       setTimeout(() => setDownloaded(false), 2000);
     } catch {
-      alert('Failed to download image. Please try again.');
+      toast.error('Failed to download image. Please try again.');
     } finally {
       setDownloading(false);
     }
@@ -202,12 +210,12 @@ function QrActionButtons({ url, fileName }: { url: string; fileName: string }) {
       } else {
         // Desktop fallback: copy URL to clipboard
         await navigator.clipboard.writeText(url);
-        alert('Image URL copied to clipboard!');
+        toast.success('Image URL copied to clipboard!');
       }
     } catch (err: any) {
       // User cancelled share sheet — not an error
       if (err?.name !== 'AbortError') {
-        alert('Failed to share. URL copied to clipboard.');
+        toast.info('Failed to share. URL copied to clipboard.');
         try { await navigator.clipboard.writeText(url); } catch {}
       }
     } finally {
@@ -369,7 +377,7 @@ export default function StaffDashboard() {
       setProcessingPayment(null);
       setReceiptFile(null);
     } catch {
-      alert('Failed to release lock');
+      toast.error('Failed to release lock');
     } finally {
       setLoading(false);
     }
@@ -377,7 +385,7 @@ export default function StaffDashboard() {
 
   const handleFailPayment = async () => {
     if (!processingPayment) return;
-    if (!comment) return alert('Please provide a comment explaining why this failed.');
+    if (!comment) return toast.error('Please provide a comment explaining why this failed.');
     setLoading(true);
     try {
       await api.post(`/staff/payments/${processingPayment.id}/fail`, { staff_comment: comment });
@@ -386,8 +394,9 @@ export default function StaffDashboard() {
       setProcessingPayment(null);
       setReceiptFile(null);
       fetchBalance();
+      toast.success('Payment marked as failed');
     } catch {
-      alert('Error failing payment');
+      toast.error('Error failing payment');
     } finally {
       setLoading(false);
     }
@@ -419,6 +428,7 @@ export default function StaffDashboard() {
       setReceiptFile(null);
       // Optimistic: deduct balance locally
       setBalance(prev => prev - processingPayment.amount);
+      toast.success('Payment confirmed successfully');
     } catch (err: any) {
       const detail = err.response?.data?.detail;
       setError(typeof detail === 'string' ? detail : 'Failed to complete payment.');

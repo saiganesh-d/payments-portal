@@ -3,6 +3,7 @@ import { SignOut, Sun, Moon, List, X } from '@phosphor-icons/react';
 import { useAuthStore } from './store/authStore';
 import ClientDashboard from './ClientDashboard';
 import StaffDashboard from './StaffDashboard';
+import { ToastContainer } from './toast';
 import './App.css';
 
 function App() {
@@ -38,6 +39,7 @@ function App() {
 
   return (
     <div className="app-container">
+      <ToastContainer />
       {/* Sidebar overlay */}
       {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
