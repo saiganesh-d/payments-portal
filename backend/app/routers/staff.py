@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select, and_, or_, func, case, desc
 from typing import List, Optional
@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.core import User, PaymentRequest, PaymentStatus, Worker
 from app.schemas.core import PaymentResponse, PaymentComplete
 from app.core.deps import require_staff
-from app.core.s3 import resolve_qr_urls
+from app.core.s3 import resolve_qr_urls, upload_file_to_s3
 
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -104,6 +104,11 @@ def lock_payment(payment_id: str, db: Session = Depends(get_db), current_user: U
     ).filter(PaymentRequest.id == payment_id).first()
     resolve_qr_urls(payment)
     return payment
+
+@router.post("/payments/upload-receipt")
+async def upload_receipt(file: UploadFile = File(...), current_user: User = Depends(require_staff)):
+    url = await upload_file_to_s3(file, folder="receipts")
+    return {"url": url}
 
 @router.post("/payments/{payment_id}/complete", response_model=PaymentResponse)
 def complete_payment(payment_id: str, data: PaymentComplete, db: Session = Depends(get_db), current_user: User = Depends(require_staff)):

@@ -56,6 +56,10 @@ def resolve_qr_urls(obj):
         url = obj.qr_code_url
         if not url.startswith('http'):
             obj.qr_code_url = get_presigned_url(url)
+    if hasattr(obj, 'receipt_url') and obj.receipt_url:
+        url = obj.receipt_url
+        if not url.startswith('http'):
+            obj.receipt_url = get_presigned_url(url)
     # Handle nested worker relationship
     if hasattr(obj, 'worker') and obj.worker:
         resolve_qr_urls(obj.worker)

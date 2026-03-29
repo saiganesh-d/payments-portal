@@ -2,9 +2,107 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   LockKey, CheckCircle, XCircle, ArrowLeft,
   MagnifyingGlass, ChartBar, CurrencyInr, TrendUp,
-  CaretUp, CaretDown, ArrowsDownUp
+  CaretUp, CaretDown, ArrowsDownUp,
+  DownloadSimple, ShareNetwork, Camera, Image as ImageIcon, Trash
 } from '@phosphor-icons/react';
 import api from './api';
+
+const RECEIPT_MAX_DIMENSION = 1200;
+const RECEIPT_JPEG_QUALITY = 0.75;
+
+function compressReceiptImage(file: File): Promise<File> {
+  return new Promise((resolve) => {
+    if (file.size <= 150 * 1024) { resolve(file); return; }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > RECEIPT_MAX_DIMENSION || height > RECEIPT_MAX_DIMENSION) {
+        const ratio = Math.min(RECEIPT_MAX_DIMENSION / width, RECEIPT_MAX_DIMENSION / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(file); return; }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob || blob.size >= file.size) { resolve(file); return; }
+        const baseName = file.name.replace(/\.[^.]+$/, '');
+        resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' }));
+      }, 'image/jpeg', RECEIPT_JPEG_QUALITY);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+function ReceiptPicker({ file, onFileChange }: { file: File | null; onFileChange: (f: File | null) => void }) {
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
+
+  useEffect(() => {
+    if (!file) { setPreview(null); return; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+    e.target.value = '';
+    if (!selected.type.startsWith('image/')) { alert('Please select an image file.'); return; }
+    if (selected.size > 10 * 1024 * 1024) { alert('File too large. Maximum 10 MB.'); return; }
+    setCompressing(true);
+    try {
+      const compressed = await compressReceiptImage(selected);
+      onFileChange(compressed);
+    } catch { onFileChange(selected); }
+    finally { setCompressing(false); }
+  };
+
+  if (compressing) {
+    return <div style={{ padding: '0.75rem', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.85rem', border: '2px dashed var(--border-color)', borderRadius: 'var(--radius-md)' }}>Compressing...</div>;
+  }
+
+  if (file && preview) {
+    return (
+      <div style={{ border: '2px solid #16a34a', borderRadius: 'var(--radius-md)', padding: '0.75rem', background: '#f0fdf4', textAlign: 'center' }}>
+        <img src={preview} alt="Receipt" style={{ maxWidth: '100%', maxHeight: '140px', objectFit: 'contain', borderRadius: 'var(--radius-sm)', marginBottom: '0.5rem' }} />
+        <div style={{ color: '#16a34a', fontWeight: 500, fontSize: '0.8rem', marginBottom: '0.4rem' }}>{file.name} ({Math.round(file.size / 1024)}KB)</div>
+        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+          <button type="button" className="btn-secondary" style={{ padding: '0.3rem 0.55rem', fontSize: '0.78rem' }} onClick={() => galleryRef.current?.click()}><ImageIcon size={13} /> Change</button>
+          <button type="button" className="btn-secondary" style={{ padding: '0.3rem 0.55rem', fontSize: '0.78rem' }} onClick={() => cameraRef.current?.click()}><Camera size={13} /> Retake</button>
+          <button type="button" className="btn-secondary" style={{ padding: '0.3rem 0.55rem', fontSize: '0.78rem', color: '#dc2626' }} onClick={() => onFileChange(null)}><Trash size={13} /> Remove</button>
+        </div>
+        <input ref={galleryRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display: 'none' }} />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <button type="button" onClick={() => cameraRef.current?.click()} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', border: '2px dashed var(--accent-color)', borderRadius: 'var(--radius-md)', padding: '0.875rem', background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--accent-color)', fontWeight: 500, fontSize: '0.82rem', fontFamily: 'inherit' }}>
+          <Camera size={22} /><span>Camera</span>
+        </button>
+        <button type="button" onClick={() => galleryRef.current?.click()} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', border: '2px dashed var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.875rem', background: 'var(--bg-primary)', cursor: 'pointer', color: 'var(--text-secondary)', fontWeight: 500, fontSize: '0.82rem', fontFamily: 'inherit' }}>
+          <ImageIcon size={22} /><span>Gallery</span>
+        </button>
+      </div>
+      <input ref={galleryRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{ display: 'none' }} />
+    </div>
+  );
+}
 
 function timeAgo(dateStr: string): string {
   const now = new Date();
@@ -51,6 +149,120 @@ function TableSkeleton({ columns, rows = 5 }: { columns: number; rows?: number }
   );
 }
 
+// ==========================================
+// QR ACTION BUTTONS (Download + Share)
+// ==========================================
+function QrActionButtons({ url, fileName }: { url: string; fileName: string }) {
+  const [downloading, setDownloading] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
+  const [sharing, setSharing] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    setDownloaded(false);
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      const ext = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${fileName}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setDownloaded(true);
+      setTimeout(() => setDownloaded(false), 2000);
+    } catch {
+      alert('Failed to download image. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    setSharing(true);
+    try {
+      // Try Web Share API with file (mobile-friendly)
+      if (navigator.share) {
+        try {
+          const res = await fetch(url);
+          const blob = await res.blob();
+          const ext = blob.type.includes('png') ? 'png' : 'jpg';
+          const file = new File([blob], `${fileName}.${ext}`, { type: blob.type });
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: fileName });
+            setSharing(false);
+            return;
+          }
+        } catch { /* fall through to URL share */ }
+        // Fallback: share URL only
+        await navigator.share({ title: fileName, url });
+      } else {
+        // Desktop fallback: copy URL to clipboard
+        await navigator.clipboard.writeText(url);
+        alert('Image URL copied to clipboard!');
+      }
+    } catch (err: any) {
+      // User cancelled share sheet — not an error
+      if (err?.name !== 'AbortError') {
+        alert('Failed to share. URL copied to clipboard.');
+        try { await navigator.clipboard.writeText(url); } catch {}
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const btnStyle: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+    padding: '0.5rem 1rem', borderRadius: 'var(--radius-md)',
+    fontSize: '0.85rem', fontWeight: 500, fontFamily: 'inherit',
+    cursor: 'pointer', border: '1.5px solid var(--border-color)',
+    background: 'var(--bg-primary)', color: 'var(--text-primary)',
+    transition: 'all 0.15s',
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', marginTop: '0.75rem' }}>
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={downloading}
+        style={{
+          ...btnStyle,
+          ...(downloaded ? { background: '#dcfce7', borderColor: '#16a34a', color: '#16a34a' } : {}),
+          ...(downloading ? { opacity: 0.7, cursor: 'wait' } : {}),
+        }}
+      >
+        {downloading ? (
+          <><span className="spinner-tiny" /> Saving...</>
+        ) : downloaded ? (
+          <><CheckCircle size={16} weight="bold" /> Saved!</>
+        ) : (
+          <><DownloadSimple size={16} /> Download</>
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={handleShare}
+        disabled={sharing}
+        style={{
+          ...btnStyle,
+          ...(sharing ? { opacity: 0.7, cursor: 'wait' } : {}),
+        }}
+      >
+        {sharing ? (
+          <><span className="spinner-tiny" /> Sharing...</>
+        ) : (
+          <><ShareNetwork size={16} /> Share</>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export default function StaffDashboard() {
   const [activeTab, setActiveTab] = useState<'queue' | 'history'>('queue');
   const [payments, setPayments] = useState<any[]>([]);
@@ -60,6 +272,7 @@ export default function StaffDashboard() {
 
   const [utr, setUtr] = useState('');
   const [comment, setComment] = useState('');
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [searchQueue, setSearchQueue] = useState('');
@@ -133,7 +346,7 @@ export default function StaffDashboard() {
     try {
       const res = await api.post(`/staff/payments/${paymentId}/lock`);
       setProcessingPayment(res.data);
-      setUtr(''); setComment('');
+      setUtr(''); setComment(''); setReceiptFile(null);
       // Optimistic: remove locked payment from pending list instantly
       setPayments(prev => prev.filter(p => p.id !== paymentId));
     } catch (err: any) {
@@ -154,6 +367,7 @@ export default function StaffDashboard() {
       const released = { ...processingPayment, status: 'PENDING', locked_by_staff_id: null, locked_at: null };
       setPayments(prev => [released, ...prev]);
       setProcessingPayment(null);
+      setReceiptFile(null);
     } catch {
       alert('Failed to release lock');
     } finally {
@@ -170,6 +384,7 @@ export default function StaffDashboard() {
       // Optimistic: clear processing view, remove from list (it's now FAILED)
       setPayments(prev => prev.filter(p => p.id !== processingPayment.id));
       setProcessingPayment(null);
+      setReceiptFile(null);
       fetchBalance();
     } catch {
       alert('Error failing payment');
@@ -184,13 +399,24 @@ export default function StaffDashboard() {
     setLoading(true);
     setError('');
     try {
+      let receiptUrl: string | null = null;
+      if (receiptFile) {
+        const formData = new FormData();
+        formData.append('file', receiptFile);
+        const uploadRes = await api.post('/staff/payments/upload-receipt', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        receiptUrl = uploadRes.data.url;
+      }
       await api.post(`/staff/payments/${processingPayment.id}/complete`, {
         transaction_ref_no: utr,
-        staff_comment: comment || null
+        staff_comment: comment || null,
+        receipt_url: receiptUrl
       });
       // Optimistic: clear processing view, remove from list (it's now COMPLETED)
       setPayments(prev => prev.filter(p => p.id !== processingPayment.id));
       setProcessingPayment(null);
+      setReceiptFile(null);
       // Optimistic: deduct balance locally
       setBalance(prev => prev - processingPayment.amount);
     } catch (err: any) {
@@ -258,6 +484,7 @@ export default function StaffDashboard() {
           <div style={{ background: 'var(--bg-secondary)', padding: '1rem', borderRadius: 'var(--radius-lg)', marginBottom: '1rem', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>Scan to Pay</div>
             <img src={worker.qr_code_url} alt="QR Code" style={{ maxWidth: '280px', width: '100%', objectFit: 'contain', borderRadius: '8px' }} />
+            <QrActionButtons url={worker.qr_code_url} fileName={`QR_${worker.worker_id_code || worker.name || 'code'}`} />
           </div>
         )}
 
@@ -327,6 +554,10 @@ export default function StaffDashboard() {
                 onChange={e => setComment(e.target.value)}
                 style={{ fontSize: '1rem', padding: '0.75rem' }}
               />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: '0.85rem' }}>Payment Receipt / Screenshot (Optional)</label>
+              <ReceiptPicker file={receiptFile} onFileChange={setReceiptFile} />
             </div>
           </div>
 

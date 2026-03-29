@@ -167,6 +167,13 @@ def get_staff_full_history(staff_id: str, db: Session = Depends(get_db), current
 # --- WORKER MANAGEMENT ---
 @router.post("/workers", response_model=WorkerResponse)
 def create_worker(worker_data: WorkerCreate, db: Session = Depends(get_db), current_user: User = Depends(require_client)):
+    if worker_data.worker_id_code and db.query(Worker).filter(
+        Worker.client_id == current_user.id,
+        Worker.worker_id_code == worker_data.worker_id_code,
+        Worker.is_active == True
+    ).first():
+        raise HTTPException(status_code=400, detail="User ID Code already exists")
+
     new_worker = Worker(
         client_id=current_user.id,
         name=worker_data.name,

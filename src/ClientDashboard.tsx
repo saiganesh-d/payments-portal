@@ -363,6 +363,8 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
   const [accName, setAccName] = useState('');
   const [bankName, setBankName] = useState('');
 
+  const workerIdExists = userIdCode.trim().length > 0 && workers.some(w => w.worker_id_code === userIdCode.trim());
+
   const fetchWorkers = useCallback(async () => {
     setDataLoading(true);
     try {
@@ -707,7 +709,8 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>User ID Code *</label>
-                    <input required value={userIdCode} onChange={e => setUserIdCode(e.target.value)} placeholder="Unique identifier" />
+                    <input required value={userIdCode} onChange={e => setUserIdCode(e.target.value)} placeholder="Unique identifier" style={workerIdExists ? { borderColor: 'var(--danger-color, #e53e3e)' } : {}} />
+                    {workerIdExists && <small style={{ color: 'var(--danger-color, #e53e3e)', marginTop: '0.25rem', display: 'block' }}>User ID Code already exists</small>}
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label>Full Name (Optional)</label>
@@ -750,7 +753,7 @@ function UsersBlock({ onViewStatement }: { onViewStatement: (id: string) => void
 
               <div className="modal-footer" style={{ marginTop: '0.5rem' }}>
                 <button type="button" className="btn-secondary" onClick={() => setShowAdd(false)}>Cancel</button>
-                <button type="submit" className="btn-primary" disabled={loading}>{loading ? 'Uploading...' : 'Save User'}</button>
+                <button type="submit" className="btn-primary" disabled={loading || workerIdExists}>{loading ? 'Uploading...' : 'Save User'}</button>
               </div>
             </form>
           </div>
@@ -1320,6 +1323,8 @@ function AdminPanelBlock() {
   const [showHistory, setShowHistory] = useState<string | null>(null);
   const [showAddStaffForm, setShowAddStaffForm] = useState(false);
 
+  const usernameExists = username.trim().length > 0 && staffList.some(s => s.username === username.trim());
+
   const fetchStaff = useCallback(async () => {
     setDataLoading(true);
     try {
@@ -1414,7 +1419,8 @@ function AdminPanelBlock() {
           <form onSubmit={handleCreateStaff} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '180px' }}>
               <label>Staff Login Username</label>
-              <input required type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g., staff_john" />
+              <input required type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g., staff_john" style={usernameExists ? { borderColor: 'var(--danger-color, #e53e3e)' } : {}} />
+              {usernameExists && <small style={{ color: 'var(--danger-color, #e53e3e)', marginTop: '0.25rem', display: 'block' }}>Username already taken</small>}
             </div>
             <div className="form-group" style={{ marginBottom: 0, flex: 1, minWidth: '180px' }}>
               <label>Password</label>
@@ -1427,7 +1433,7 @@ function AdminPanelBlock() {
                 <option value="all">All Clients</option>
               </select>
             </div>
-            <button type="submit" className="btn-primary" disabled={loading} style={{ height: '42px' }}>
+            <button type="submit" className="btn-primary" disabled={loading || usernameExists} style={{ height: '42px' }}>
               {loading ? 'Creating...' : 'Create Staff Account'}
             </button>
           </form>
